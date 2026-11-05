@@ -42,9 +42,6 @@ yarn-error.*
 /ios
 /android
 
-# student expo project (never commit)
-/app/
-
 # others
 .vscode/
 .idea/
