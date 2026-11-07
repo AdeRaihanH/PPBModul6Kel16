@@ -20,10 +20,12 @@ function assertValidTemperature(temperature) {
   }
 }
 
+const COLUMNS = "id, temperature, threshold_value, client_id, recorded_at";
+
 export const ReadingsModel = {
   async list() {
     const { rows } = await pool.query(
-      `SELECT id, temperature, threshold_value, recorded_at
+      `SELECT ${COLUMNS}
        FROM public.sensor_readings
        ORDER BY recorded_at DESC
        LIMIT 100`
@@ -33,7 +35,7 @@ export const ReadingsModel = {
 
   async latest() {
     const { rows } = await pool.query(
-      `SELECT id, temperature, threshold_value, recorded_at
+      `SELECT ${COLUMNS}
        FROM public.sensor_readings
        ORDER BY recorded_at DESC
        LIMIT 1`
@@ -41,16 +43,39 @@ export const ReadingsModel = {
     return normalize(rows[0] ?? null);
   },
 
+  /**
+   * Insert a reading, safe to retry.
+   *
+   * The writer sends its own `client_id`. If a previous attempt already stored
+   * this reading — for example the response was lost in transit — the conflict
+   * is swallowed and the existing row is returned instead, so a retry can never
+   * duplicate an alarm. Returns `{ reading, duplicate }` so the caller can say
+   * which happened.
+   */
   async create(payload) {
-    const { temperature, threshold_value } = payload ?? {};
+    const { temperature, threshold_value, client_id } = payload ?? {};
     assertValidTemperature(temperature);
 
+    const clientId =
+      typeof client_id === "string" && client_id.trim() ? client_id.trim() : null;
+
     const { rows } = await pool.query(
-      `INSERT INTO public.sensor_readings (temperature, threshold_value)
-       VALUES ($1, $2)
-       RETURNING id, temperature, threshold_value, recorded_at`,
-      [temperature, threshold_value ?? null]
+      `INSERT INTO public.sensor_readings (temperature, threshold_value, client_id)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (client_id) DO NOTHING
+       RETURNING ${COLUMNS}`,
+      [temperature, threshold_value ?? null, clientId]
     );
-    return normalize(rows[0]);
+
+    if (rows.length > 0) {
+      return { reading: normalize(rows[0]), duplicate: false };
+    }
+
+    // Only reachable when client_id collided, so the row is guaranteed to exist.
+    const existing = await pool.query(
+      `SELECT ${COLUMNS} FROM public.sensor_readings WHERE client_id = $1`,
+      [clientId]
+    );
+    return { reading: normalize(existing.rows[0] ?? null), duplicate: true };
   },
 };

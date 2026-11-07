@@ -39,6 +39,51 @@ once at bundle time, so restart Metro with `npx expo start -c` after editing
 > `rundll32 url.dll,FileProtocolHandler` instead and keeps a failed browser
 > launch from killing the CLI. Re-apply with `npm run patch:expo-cli`.
 
+## Reliability (challenge feature)
+
+The pipeline had a real data-loss bug: the simulator wrote each alarm with a bare
+`fetch` and moved on. If the backend happened to be restarting, that alarm was
+gone — the one failure a monitoring system cannot afford.
+
+### What changed
+
+**Nothing is dropped.** Writes go through an outbox
+(`sensor-simulator/alarmQueue.js`) that retries with exponential backoff
+(1 s → 2 s → 4 s, capped at 30 s) and only removes an item after a confirmed
+write. Items are delivered in order, so alarms land in the order they happened.
+
+**Nothing is duplicated.** Every reading carries a `client_id` minted once, when
+the alarm is raised, and reused by every retry. The backend has a unique index on
+that column and inserts with `ON CONFLICT (client_id) DO NOTHING`, returning the
+existing row and `duplicate: true` when a write was already stored. This is what
+makes retrying safe: a lost response is no longer a second alarm.
+
+**The schema migrates itself.** `backend/src/config/migrate.js` runs
+`ADD COLUMN IF NOT EXISTS` / `CREATE UNIQUE INDEX IF NOT EXISTS` at boot, so an
+existing database needs no manual step. It is non-fatal: if the database is
+unreachable the API still starts and reports the problem.
+
+**The app stops lying about health.** `GET /api/health` reports database
+reachability and query latency, and the Monitoring screen shows one line:
+`Database ok · 12 ms`, `Database unavailable`, or `Backend unreachable`. A live
+sensor feed with a dead database is not "working", and the UI now says so.
+
+### Proving it
+
+```bash
+# 1. idempotency against the real database
+node backend/scripts/check-idempotency.mjs
+
+# 2. the outbox: retry policy, ordering, no double-send
+#    (19 checks, fake clock and fake transport)
+
+# 3. end to end: point the writer at a dead port, raise alarms, revive it
+```
+
+The end-to-end check queues three alarms while the backend is unreachable, drains
+them when it returns, then resends the same three ids — and the database still
+holds each one exactly once.
+
 ## Thermal Guard (challenge feature)
 
 The base app is reactive: it shows the current temperature and records a reading

@@ -17,6 +17,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useMqttSensor } from "../hooks/useMqttSensor.js";
 import { useLiveAnalytics } from "../hooks/useLiveAnalytics.js";
+import { useBackendHealth } from "../hooks/useBackendHealth.js";
 import { Api } from "../services/api.js";
 import { DataTable } from "../components/DataTable.js";
 import { TempOrb } from "../components/TempOrb.js";
@@ -117,6 +118,7 @@ export function MonitoringScreen() {
 		timestamp,
 		threshold: latestThreshold,
 	});
+	const backend = useBackendHealth();
 
 	// Escalate with a notification haptic the moment the limit is breached,
 	// once per crossing rather than on every sample that stays above it.
@@ -320,6 +322,42 @@ export function MonitoringScreen() {
 						<View style={styles.metaRow}>
 							<Ionicons name="refresh-outline" size={15} color={color.text3} />
 							<Text style={styles.metaText}>{freshness}</Text>
+						</View>
+						<View style={styles.metaRow}>
+							<Ionicons
+								name={
+									backend.state === "ok"
+										? "server-outline"
+										: "cloud-offline-outline"
+								}
+								size={15}
+								color={
+									backend.state === "ok"
+										? color.text3
+										: backend.state === "degraded"
+											? color.warnText
+											: color.dangerText
+								}
+							/>
+							<Text
+								style={[
+									styles.metaText,
+									backend.state !== "ok" && {
+										color:
+											backend.state === "degraded"
+												? color.warnText
+												: color.dangerText,
+									},
+								]}
+							>
+								{backend.state === "ok"
+									? `Database ok · ${backend.latencyMs ?? "?"} ms`
+									: backend.state === "degraded"
+										? "Database unavailable"
+										: backend.state === "unreachable"
+											? "Backend unreachable"
+											: "Checking backend…"}
+							</Text>
 						</View>
 					</View>
 
