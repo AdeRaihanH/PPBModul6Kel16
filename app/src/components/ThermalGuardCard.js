@@ -179,9 +179,11 @@ export function ThermalGuardCard({ analytics }) {
 					hint={
 						projection?.willCross
 							? "projected crossing"
-							: rising
-								? "below confidence"
-								: "no upward trend"
+							: !projection
+								? "collecting"
+								: rising
+									? "below confidence"
+									: "no upward trend"
 					}
 					tone={etaTone}
 				/>
