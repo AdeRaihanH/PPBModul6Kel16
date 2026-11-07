@@ -22,13 +22,42 @@ function assertValidTemperature(temperature) {
 
 const COLUMNS = "id, temperature, threshold_value, client_id, recorded_at";
 
+export const DEFAULT_LIMIT = 100;
+export const MAX_LIMIT = 500;
+
+/**
+ * Clamps a client-supplied time range.
+ *
+ * A range filter is useless without an upper bound on rows, and an unbounded
+ * query would eventually drag the whole table onto a phone. Both ends are clamped
+ * here rather than trusted from the query string.
+ */
+export function normalizeRange({ since, limit } = {}) {
+  const parsedLimit = Number(limit);
+  const safeLimit =
+    Number.isFinite(parsedLimit) && parsedLimit > 0
+      ? Math.min(Math.floor(parsedLimit), MAX_LIMIT)
+      : DEFAULT_LIMIT;
+
+  let safeSince = null;
+  if (typeof since === "string" && since.trim()) {
+    const time = Date.parse(since);
+    if (!Number.isNaN(time)) safeSince = new Date(time).toISOString();
+  }
+
+  return { since: safeSince, limit: safeLimit };
+}
+
 export const ReadingsModel = {
-  async list() {
+  async list(options = {}) {
+    const { since, limit } = normalizeRange(options);
     const { rows } = await pool.query(
       `SELECT ${COLUMNS}
        FROM public.sensor_readings
+       WHERE ($1::timestamptz IS NULL OR recorded_at >= $1)
        ORDER BY recorded_at DESC
-       LIMIT 100`
+       LIMIT $2`,
+      [since, limit]
     );
     return rows.map(normalize);
   },

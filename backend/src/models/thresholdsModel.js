@@ -1,4 +1,5 @@
 import { pool } from "../config/database.js";
+import { normalizeRange } from "./readingsModel.js";
 
 function normalize(row) {
   if (!row) return row;
@@ -19,12 +20,15 @@ function assertValidValue(value) {
 }
 
 export const ThresholdsModel = {
-  async list() {
+  async list(options = {}) {
+    const { since, limit } = normalizeRange(options);
     const { rows } = await pool.query(
       `SELECT id, value, note, created_at
        FROM public.threshold_settings
+       WHERE ($1::timestamptz IS NULL OR created_at >= $1)
        ORDER BY created_at DESC
-       LIMIT 100`
+       LIMIT $2`,
+      [since, limit]
     );
     return rows.map(normalize);
   },

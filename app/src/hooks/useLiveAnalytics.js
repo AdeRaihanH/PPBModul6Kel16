@@ -1,46 +1,39 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-	TREND_WINDOW,
 	WINDOW_SIZE,
 	describe,
 	detectAnomaly,
-	projectCrossing,
+	instantRate,
+	proximity,
 } from "../lib/thermalStats.js";
 
 const EMPTY = {
 	samples: [],
 	stats: null,
-	trend: null,
-	anomaly: null,
-	projection: null,
+	rate: null,
+	proximity: { state: "unknown", headroom: null },
 	status: { key: "waiting", label: "Waiting", tone: "muted" },
-	sampleAt: null,
+	anomaly: null,
 	current: null,
 	threshold: null,
+	sampleAt: null,
 };
 
-function deriveStatus(current, threshold, projection, trend) {
-	if (typeof current !== "number") {
-		return { key: "waiting", label: "Waiting", tone: "muted" };
-	}
-	if (typeof threshold === "number" && current >= threshold) {
-		return { key: "critical", label: "Over limit", tone: "danger" };
-	}
-	if (projection?.willCross && projection.etaSec !== null && projection.etaSec <= 120) {
-		return { key: "imminent", label: "Crossing soon", tone: "danger" };
-	}
-	if (trend && trend.slopePerMin > 0.15) {
-		return { key: "rising", label: "Rising", tone: "warn" };
-	}
-	if (trend && trend.slopePerMin < -0.15) {
-		return { key: "falling", label: "Falling", tone: "success" };
-	}
-	return { key: "stable", label: "Stable", tone: "success" };
-}
+const STATUS_LABEL = {
+	safe: { key: "safe", label: "Safe", tone: "success" },
+	near: { key: "near", label: "Near limit", tone: "warn" },
+	over: { key: "over", label: "Over limit", tone: "danger" },
+	unknown: { key: "waiting", label: "Waiting", tone: "muted" },
+};
+
+// A live reading with no threshold configured is not "waiting for data" — it is
+// "cannot judge". Saying so avoids a status pill that looks stuck.
+const NO_LIMIT = { key: "nolimit", label: "No limit", tone: "muted" };
 
 /**
- * Accumulates the live MQTT feed into a rolling window and derives the
- * predictive view: trend slope, ETA to threshold, volatility, anomaly score.
+ * Accumulates the live MQTT feed into a rolling window and derives the panel's
+ * view: how fast the reading is moving, how much headroom is left, whether the
+ * latest sample looks wrong.
  */
 export function useLiveAnalytics({ temperature, timestamp, threshold }) {
 	const [samples, setSamples] = useState([]);
@@ -65,34 +58,21 @@ export function useLiveAnalytics({ temperature, timestamp, threshold }) {
 		if (!samples.length) return EMPTY;
 
 		const current = samples[samples.length - 1].v;
-		// Two different questions, two different windows. The rate and the
-		// projection describe what is happening now, so they use the recent tail.
-		// The anomaly verdict asks whether one reading is off the trend, which
-		// needs the long window: a short one lets the outlier bend the very line
-		// it is measured against.
-		const recent =
-			samples.length > TREND_WINDOW ? samples.slice(-TREND_WINDOW) : samples;
-		const stats = describe(samples);
-		const anomaly = detectAnomaly(samples);
-		const projection = projectCrossing(recent, threshold);
-
-		const trend = projection
-			? {
-					slopePerMin: projection.slopePerMin,
-					confidence: projection.confidence,
-				}
-			: null;
+		const prox = proximity(current, threshold);
 
 		return {
 			samples,
-			stats,
-			trend,
-			anomaly,
-			projection,
-			status: deriveStatus(current, threshold, projection, trend),
-			sampleAt: samples[samples.length - 1].t,
+			stats: describe(samples),
+			rate: instantRate(samples),
+			proximity: prox,
+			status:
+				prox.state === "unknown" && typeof current === "number"
+					? NO_LIMIT
+					: (STATUS_LABEL[prox.state] ?? STATUS_LABEL.unknown),
+			anomaly: detectAnomaly(samples),
 			current,
 			threshold: typeof threshold === "number" ? threshold : null,
+			sampleAt: samples[samples.length - 1].t,
 		};
 	}, [samples, threshold]);
 }

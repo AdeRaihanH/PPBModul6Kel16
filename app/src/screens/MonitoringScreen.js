@@ -18,6 +18,7 @@ import Animated, {
 import { useMqttSensor } from "../hooks/useMqttSensor.js";
 import { useLiveAnalytics } from "../hooks/useLiveAnalytics.js";
 import { useBackendHealth } from "../hooks/useBackendHealth.js";
+import { useAlarmNotifications } from "../hooks/useAlarmNotifications.js";
 import { Api } from "../services/api.js";
 import { DataTable } from "../components/DataTable.js";
 import { TempOrb } from "../components/TempOrb.js";
@@ -25,6 +26,16 @@ import { ThermalGuardCard } from "../components/ThermalGuardCard.js";
 import { tokens } from "../theme/tokens.js";
 
 const { color, space, radius, shadow } = tokens;
+
+// History ranges. `ms: null` means no lower bound.
+const RANGES = [
+	{ key: "15m", label: "15 min", ms: 15 * 60 * 1000 },
+	{ key: "1h", label: "1 hour", ms: 60 * 60 * 1000 },
+	{ key: "6h", label: "6 hours", ms: 6 * 60 * 60 * 1000 },
+	{ key: "all", label: "All", ms: null },
+];
+const DEFAULT_RANGE = "1h";
+const HISTORY_LIMIT = 200;
 
 function StatusChip({ connectionState, hasError, onRetry }) {
 	const config = useMemo(() => {
@@ -111,6 +122,7 @@ export function MonitoringScreen() {
 	const [loading, setLoading] = useState(false);
 	const [refreshing, setRefreshing] = useState(false);
 	const [apiError, setApiError] = useState(null);
+	const [rangeKey, setRangeKey] = useState(DEFAULT_RANGE);
 	const reduceMotion = useReducedMotion();
 
 	const analytics = useLiveAnalytics({
@@ -119,30 +131,35 @@ export function MonitoringScreen() {
 		threshold: latestThreshold,
 	});
 	const backend = useBackendHealth();
+	const alarms = useAlarmNotifications({
+		status: analytics.status,
+		temperature: analytics.current,
+		threshold: analytics.threshold,
+	});
 
-	// Escalate with a notification haptic the moment the limit is breached,
-	// once per crossing rather than on every sample that stays above it.
+	// Haptic on the crossing itself, so the phone reacts even when the app is the
+	// thing being looked at and a notification banner would be redundant.
 	const wasOverRef = useRef(false);
 	useEffect(() => {
-		const over =
-			typeof temperature === "number" &&
-			typeof latestThreshold === "number" &&
-			temperature >= latestThreshold;
+		const over = analytics.status.key === "over";
 		if (over && !wasOverRef.current) {
 			Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
 				() => {},
 			);
 		}
 		wasOverRef.current = over;
-	}, [temperature, latestThreshold]);
+	}, [analytics.status.key]);
 
 	const fetchReadings = useCallback(async () => {
 		setLoading(true);
 		setApiError(null);
 		try {
+			const range = RANGES.find((r) => r.key === rangeKey) ?? RANGES[0];
+			const since = range.ms ? new Date(Date.now() - range.ms).toISOString() : undefined;
+
 			const [history, thresholds] = await Promise.all([
-				Api.getSensorReadings(),
-				Api.getThresholds().catch(() => null),
+				Api.getSensorReadings({ since, limit: HISTORY_LIMIT }),
+				Api.getThresholds({ limit: 1 }).catch(() => null),
 			]);
 			setReadings(history ?? []);
 			const latest = Array.isArray(thresholds) ? thresholds[0]?.value : null;
@@ -152,7 +169,7 @@ export function MonitoringScreen() {
 		} finally {
 			setLoading(false);
 		}
-	}, []);
+	}, [rangeKey]);
 
 	useFocusEffect(
 		useCallback(() => {
@@ -395,6 +412,20 @@ export function MonitoringScreen() {
 
 				<ThermalGuardCard analytics={analytics} />
 
+				{alarms.permission === "denied" ? (
+					<View style={styles.noticeRow} accessible accessibilityRole="text">
+						<Ionicons
+							name="notifications-off-outline"
+							size={15}
+							color={color.text3}
+						/>
+						<Text style={styles.noticeText}>
+							Notifications are off, so a breach only shows on this screen. Allow them
+							in system settings to be alerted in the background.
+						</Text>
+					</View>
+				) : null}
+
 				{apiError && !loading ? (
 					<View
 						style={styles.errorBanner}
@@ -440,6 +471,36 @@ export function MonitoringScreen() {
 					</View>
 				</View>
 
+				<View style={styles.rangeRow} accessibilityRole="tablist">
+					{RANGES.map((range) => {
+						const active = range.key === rangeKey;
+						return (
+							<Pressable
+								key={range.key}
+								onPress={() => setRangeKey(range.key)}
+								accessibilityRole="tab"
+								accessibilityState={{ selected: active }}
+								accessibilityLabel={`Show alarms from the last ${range.label}`}
+								hitSlop={6}
+								style={({ pressed }) => [
+									styles.rangeChip,
+									active && styles.rangeChipActive,
+									pressed && styles.pressed,
+								]}
+							>
+								<Text
+									style={[
+										styles.rangeChipText,
+										active && styles.rangeChipTextActive,
+									]}
+								>
+									{range.label}
+								</Text>
+							</Pressable>
+						);
+					})}
+				</View>
+
 				<DataTable
 					columns={[
 						{
@@ -471,7 +532,9 @@ export function MonitoringScreen() {
 					keyExtractor={(item) => item.id}
 					loading={loading && !refreshing}
 					emptyTitle="No readings yet"
-					emptyMessage="Triggered readings appear here. Pull to refresh."
+					emptyMessage={`No alarms in the last ${
+						RANGES.find((r) => r.key === rangeKey)?.label.toLowerCase() ?? "hour"
+					}. Pull to refresh, or widen the range.`}
 					emptyActionLabel="Refresh"
 					onEmptyAction={fetchReadings}
 				/>
@@ -619,6 +682,45 @@ const styles = StyleSheet.create({
 		fontWeight: "600",
 		color: color.text2,
 		fontVariant: ["tabular-nums"],
+	},
+	rangeRow: {
+		flexDirection: "row",
+		gap: space.sm,
+		flexWrap: "wrap",
+	},
+	rangeChip: {
+		minHeight: 34,
+		justifyContent: "center",
+		paddingHorizontal: space.md,
+		borderRadius: radius.chip,
+		borderCurve: "continuous",
+		borderWidth: 1,
+		borderColor: color.border,
+		backgroundColor: color.surface,
+	},
+	rangeChipActive: {
+		backgroundColor: color.primary,
+		borderColor: color.primary,
+	},
+	rangeChipText: {
+		fontSize: 13,
+		fontWeight: "600",
+		color: color.text2,
+	},
+	rangeChipTextActive: {
+		color: color.onPrimary,
+	},
+	noticeRow: {
+		flexDirection: "row",
+		alignItems: "flex-start",
+		gap: space.sm,
+		paddingHorizontal: space.sm,
+	},
+	noticeText: {
+		flex: 1,
+		fontSize: 12,
+		lineHeight: 17,
+		color: color.text3,
 	},
 	errorBanner: {
 		flexDirection: "row",

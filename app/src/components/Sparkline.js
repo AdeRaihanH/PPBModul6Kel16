@@ -37,16 +37,12 @@ function finishPath(builder) {
 }
 
 /**
- * Live temperature trace: rolling samples, dashed threshold, and a dotted
- * projection to the predicted crossing point.
+ * Live temperature trace with the limit drawn as a dashed rule.
+ *
+ * No projection line: this panel reports what was measured, and a dotted
+ * "forecast" would imply a prediction the data does not support.
  */
-export function Sparkline({
-	samples = [],
-	threshold = null,
-	projection = null,
-	tint = color.primary,
-	height = 136,
-}) {
+export function Sparkline({ samples = [], threshold = null, tint = color.primary, height = 136 }) {
 	const [width, setWidth] = useState(0);
 	const focused = useIsFocused();
 	const reduceMotion = useReducedMotion();
@@ -73,19 +69,13 @@ export function Sparkline({
 		const tN = samples[samples.length - 1].t;
 		const spanT = Math.max(1, tN - t0);
 
-		const etaMs =
-			projection?.willCross && typeof projection.etaSec === "number"
-				? Math.min(projection.etaSec * 1000, spanT * 2)
-				: 0;
-		const domain = Math.max(1, spanT + etaMs);
-
 		const plotW = width - PAD_X * 2;
 		const plotH = height - PAD_TOP - PAD_BOTTOM;
-		const toX = (t) => PAD_X + ((t - t0) / domain) * plotW;
+		const toX = (t) => PAD_X + ((t - t0) / spanT) * plotW;
 		const toY = (v) => PAD_TOP + (1 - (v - lo) / (hi - lo)) * plotH;
 
 		// Two independent builders: the area needs the outline plus two closing
-		// edges, and the immutable SkPath cannot be mutated after detach().
+		// edges, and an immutable SkPath cannot be mutated after detach().
 		const lineBuilder = startPath();
 		const areaBuilder = startPath();
 		samples.forEach((sample, index) => {
@@ -104,30 +94,16 @@ export function Sparkline({
 		areaBuilder.lineTo(toX(t0), PAD_TOP + plotH);
 		areaBuilder.close();
 
-		const line = finishPath(lineBuilder);
-		const area = finishPath(areaBuilder);
-
 		const last = samples[samples.length - 1];
-		const lastX = toX(last.t);
-		const lastY = toY(last.v);
-
-		let projected = null;
-		if (etaMs > 0 && typeof threshold === "number") {
-			const builder = startPath();
-			builder.moveTo(lastX, lastY);
-			builder.lineTo(toX(tN + etaMs), toY(threshold));
-			projected = finishPath(builder);
-		}
 
 		return {
-			line,
-			area,
-			projected,
-			lastX,
-			lastY,
+			line: finishPath(lineBuilder),
+			area: finishPath(areaBuilder),
+			lastX: toX(last.t),
+			lastY: toY(last.v),
 			thresholdY: typeof threshold === "number" ? toY(threshold) : null,
 		};
-	}, [samples, threshold, projection, width, height]);
+	}, [samples, threshold, width, height]);
 
 	const frame = useFrameCallback((info) => {
 		"worklet";
@@ -184,19 +160,6 @@ export function Sparkline({
 						>
 							<DashPathEffect intervals={[5, 5]} />
 						</Line>
-					) : null}
-
-					{geometry.projected ? (
-						<Path
-							path={geometry.projected}
-							style="stroke"
-							strokeWidth={2}
-							color={tint}
-							strokeCap="round"
-							opacity={0.55}
-						>
-							<DashPathEffect intervals={[4, 6]} />
-						</Path>
 					) : null}
 
 					<Circle

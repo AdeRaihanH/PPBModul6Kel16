@@ -1,4 +1,4 @@
-# PPB Modul 6 — LiveTemp
+﻿# PPB Modul 6 — LiveTemp
 
 IoT temperature monitoring: a sensor publishes over MQTT, an Express API persists
 threshold breaches to Postgres, and an Expo app renders the live feed.
@@ -39,13 +39,11 @@ once at bundle time, so restart Metro with `npx expo start -c` after editing
 > `rundll32 url.dll,FileProtocolHandler` instead and keeps a failed browser
 > launch from killing the CLI. Re-apply with `npm run patch:expo-cli`.
 
-## Reliability (challenge feature)
+## Reliability
 
 The pipeline had a real data-loss bug: the simulator wrote each alarm with a bare
 `fetch` and moved on. If the backend happened to be restarting, that alarm was
 gone — the one failure a monitoring system cannot afford.
-
-### What changed
 
 **Nothing is dropped.** Writes go through an outbox
 (`sensor-simulator/alarmQueue.js`) that retries with exponential backoff
@@ -68,103 +66,124 @@ reachability and query latency, and the Monitoring screen shows one line:
 `Database ok · 12 ms`, `Database unavailable`, or `Backend unreachable`. A live
 sensor feed with a dead database is not "working", and the UI now says so.
 
-### Proving it
+To prove it:
 
 ```bash
-# 1. idempotency against the real database
-node backend/scripts/check-idempotency.mjs
-
-# 2. the outbox: retry policy, ordering, no double-send
-#    (19 checks, fake clock and fake transport)
-
-# 3. end to end: point the writer at a dead port, raise alarms, revive it
+cd backend && node scripts/check-idempotency.mjs   # writes, retries, cleans up
 ```
 
-The end-to-end check queues three alarms while the backend is unreachable, drains
-them when it returns, then resends the same three ids — and the database still
-holds each one exactly once.
-
-## Thermal Guard (challenge feature)
+## Thermal Guard
 
 The base app is reactive: it shows the current temperature and records a reading
-after the limit has already been crossed. Thermal Guard makes the same feed
-**predictive** — it answers "when", not just "what".
+after the limit has already been crossed. Thermal Guard adds the two things a
+reactive display cannot tell you — **how fast the reading is moving** and **how
+much headroom is left**.
 
-Everything runs on-device from the live MQTT stream. No new dependencies, no
-extra network calls, no server changes.
+Everything runs on-device from the live MQTT stream.
 
 ### What it shows
 
-Three tiles, one line each:
-
 | Tile | Meaning |
 |---|---|
-| **Rate** | °C per minute, from a least-squares fit over the rolling window |
-| **ETA** | Time until the fitted trend reaches the threshold, counting down live |
+| **Rate** | °C per minute, measured from one reading to the next |
+| **Margin** | How many degrees are left before the limit, or how far past it |
 | **Peak** | Highest reading in the window |
 
-Plus a live trace with the threshold as a dashed rule, the projected crossing as
-a dotted continuation, and an anomaly banner when a reading breaks the trend.
+The status pill summarises the whole panel:
 
-### Seeing the ETA work
+| Pill | Condition |
+|---|---|
+| **Safe** | more than 1 °C below the limit |
+| **Near limit** | within 1 °C of the limit |
+| **Over limit** | at or above the limit |
+| **No limit** | a live reading but no threshold configured |
+| **Waiting** | no data yet |
 
-The default simulator sends a slow ramp: 24 → 32 °C and back down, repeating.
-Threshold 30 °C is crossed about a minute after start, so the ETA counts down,
-flips to **Over**, then the feed cools and the status turns **Falling**.
+Plus a live trace with the threshold as a dashed rule, and an anomaly banner when
+a single reading jumps off the trend.
 
-```bash
-cd sensor-simulator
-npm start                 # trend feed (default)
-npm start -- --random     # old independent-noise feed, no trend to project
-```
+### Why there is no ETA
 
-With `--random` the ETA stays blank on purpose: there is no trend to extrapolate.
+An earlier version extrapolated a crossing time from a fitted line. It was
+removed deliberately, for two reasons found by testing it:
+
+- On real sensor noise the fit was not confident enough to say anything, so the
+  tile read `--` almost all the time — a feature that never fires.
+- When it did fire it could count down to a crossing that would never happen,
+  because a long-window fit keeps reporting a rise after the reading has turned
+  around. A confident wrong number is worse than no number.
+
+The panel now reports only what was measured. There is no projection line on the
+chart for the same reason.
+
+### Notifications
+
+Crossing the limit fires one local notification, so a breach is not silent when
+the phone is in your pocket. `app/src/lib/alarmTrigger.js` holds the policy as a
+pure function: one per crossing, never repeated while the reading stays above the
+limit, and a 60 s cooldown so a reading oscillating around the threshold cannot
+produce a storm.
+
+Honest limitation: the alert runs on the JS thread, so it fires while the app is
+alive. Alerting with the app fully closed needs a server-side push, which requires
+a development build (Expo Go cannot receive remote notifications on Android since
+SDK 53). If notification permission is denied, the Monitoring screen says so
+instead of failing silently.
+
+### Alarm history filter
+
+The history can be narrowed to the last 15 minutes, 1 hour, 6 hours, or all.
+Filtering happens in the query (`?since=<ISO date>&limit=<n>`), not in the app, so
+a long range does not drag the whole table onto the phone. Both ends are clamped
+server-side: `limit` to 500, and an unparseable `since` falls back to no lower
+bound rather than erroring.
 
 ### The statistics
 
 `app/src/lib/thermalStats.js` — pure functions, no React, no native imports, so
-the math is testable in isolation.
+the maths is testable in isolation.
 
-- **Rolling window** of 48 samples (~4 min at the 5 s publish rate) for the chart
-  and the window figures.
-- **Rate and ETA use the last 8 samples** (~35 s), not the whole window. Fitting
-  four minutes answers "what has this been doing", which keeps reporting a rise
-  long after the sensor has turned around — raise 10 °C then drop 5 °C and the
-  whole-window slope still reads positive. Eight samples follows the turn while
-  still averaging out sensor noise.
-- **Trend**: ordinary least squares on `(t, temperature)`. Time is normalised to
-  seconds from the window start — fitting against raw epoch seconds would square
-  numbers around 1e18 and lose the slope in float64 rounding.
-- **Confidence**: R² of that fit. The ETA is withheld below R² 0.50, when there
-  are fewer than 6 points, or when it projects beyond one hour. R² 0.30 sounds
-  like a trend but over eight points is p ≈ 0.16, which random data clears about
-  a third of the time; 0.50 is roughly p ≈ 0.05 and a real ramp sits near 0.99.
-- **Anomaly**: residuals from the fitted line over the **long** window, then
-  median absolute deviation (MAD), scaled by 1.4826 to compare against σ.
-  Detrending first is the whole point — a healthy ramp is not an outlier, but a
-  reading that jumps off the ramp is. MAD is used instead of a standard deviation
-  because the outlier being hunted would otherwise inflate the very scale used to
-  judge it. The long window matters too: over eight points a +11 °C spike drags
-  the fitted line towards itself and scores a harmless 2.5σ; over 48 it is
-  unmistakable. A floor of 0.01 °C stops sensor resolution being read as signal.
+- **Rolling window** of 48 samples (~4 min at the 5 s publish rate) for the chart.
+- **Rate** is measured step by step: each value is the change from one reading to
+  the next, and the result is the **median of the last three steps**. A single
+  step is not used directly because at ±0.12 °C of sensor noise one sample swings
+  the rate by ±1.4 °C/min, which would flicker between rising and falling while
+  the reading is actually flat. The median rejects that without the lag of a long
+  fit: a real reversal shows within two readings.
+- **Proximity** compares the current reading with the threshold. The 1 °C "near"
+  band is roughly one sensor step, so the warning arrives before the limit is
+  crossed but late enough to mean something.
+- **Anomaly**: residuals from a fitted line over the **long** window, then median
+  absolute deviation (MAD), scaled by 1.4826 to compare against σ. Detrending
+  first is the whole point — a healthy ramp is not an outlier, but a reading that
+  jumps off the ramp is. MAD is used instead of a standard deviation because the
+  outlier being hunted would otherwise inflate the very scale used to judge it.
+  The long window matters too: over eight points a +11 °C spike drags the fitted
+  line towards itself and scores a harmless 2.5σ; over 48 it scores about 9σ. A
+  floor of 0.01 °C stops sensor resolution being read as a signal.
 
 ### Design notes
 
-- The ETA ticks once a second while samples arrive every 5 s, so the number
-  visibly counts down. That countdown lives in its own component — otherwise a
-  one-second timer would re-render the whole screen.
 - The trace is drawn with Skia, which the app already used for the temperature
   orb, so the chart costs no extra dependency.
-- Crossing the threshold fires one notification haptic per crossing, not one per
-  sample, and motion is disabled under the system reduce-motion setting.
+- Crossing the threshold fires one haptic per crossing, not one per sample, and
+  motion is disabled under the system reduce-motion setting.
+- The simulator defaults to a trend feed (24 → 32 °C, heating then cooling) so the
+  panel has something to show; `npm start -- --random` restores the old
+  independent-noise feed.
 
 ### Files
 
 ```
-app/src/lib/thermalStats.js          rolling-window statistics (pure)
-app/src/hooks/useLiveAnalytics.js    accumulates the MQTT feed, derives the view
-app/src/components/Sparkline.js      Skia trace, threshold rule, projection
+app/src/lib/thermalStats.js             rate, proximity, anomaly (pure)
+app/src/lib/alarmTrigger.js             when to notify, and the wording (pure)
+app/src/hooks/useLiveAnalytics.js       accumulates the MQTT feed, derives the view
+app/src/hooks/useAlarmNotifications.js  one notification per crossing
+app/src/hooks/useBackendHealth.js       polls /api/health
+app/src/services/notifications.js       permission, Android channel, local alert
+app/src/components/Sparkline.js         Skia trace with the limit rule
 app/src/components/ThermalGuardCard.js  the panel
-app/src/screens/MonitoringScreen.js  wires it to the live sensor
-sensor-simulator/temperature.js      random and trend sample generators
+app/src/screens/MonitoringScreen.js     wires it to the live sensor
+sensor-simulator/temperature.js         random and trend sample generators
+sensor-simulator/alarmQueue.js          retrying outbox for alarm writes
 ```

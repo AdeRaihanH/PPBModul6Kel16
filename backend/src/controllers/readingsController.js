@@ -1,9 +1,15 @@
 import { ReadingsModel } from "../models/readingsModel.js";
 
+// Accepts ?since=<ISO date>&limit=<n>. Invalid values fall back to defaults in
+// the model rather than erroring: a malformed filter should not break the screen.
+function rangeFrom(req) {
+  return { since: req.query.since, limit: req.query.limit };
+}
+
 export const ReadingsController = {
   async list(req, res) {
     try {
-      const data = await ReadingsModel.list();
+      const data = await ReadingsModel.list(rangeFrom(req));
       res.json(data);
     } catch (error) {
       res.status(500).json({ error: error.message });

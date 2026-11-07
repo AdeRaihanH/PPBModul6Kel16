@@ -34,12 +34,21 @@ async function request(path, options = {}) {
   }
 }
 
+// Builds ?since=…&limit=… only from values that were actually provided, so an
+// unfiltered request keeps the exact URL it had before.
+function queryString({ since, limit } = {}) {
+  const params = [];
+  if (since) params.push(`since=${encodeURIComponent(since)}`);
+  if (limit) params.push(`limit=${encodeURIComponent(limit)}`);
+  return params.length ? `?${params.join("&")}` : "";
+}
+
 export const Api = {
-  getSensorReadings() {
-    return request("/api/readings");
+  getSensorReadings(options = {}) {
+    return request(`/api/readings${queryString(options)}`);
   },
-  getThresholds() {
-    return request("/api/thresholds");
+  getThresholds(options = {}) {
+    return request(`/api/thresholds${queryString(options)}`);
   },
   createThreshold(payload) {
     return request("/api/thresholds", {

@@ -1,8 +1,6 @@
-import { useEffect, useState } from "react";
 import { Text, View, StyleSheet } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Sparkline } from "./Sparkline.js";
-import { formatDuration } from "../lib/thermalStats.js";
 import { tokens } from "../theme/tokens.js";
 
 const { color, space, radius, shadow } = tokens;
@@ -24,53 +22,31 @@ const TONES = {
 
 const STATUS_ICON = {
 	waiting: "ellipsis-horizontal",
-	stable: "remove",
-	rising: "trending-up",
-	falling: "trending-down",
-	imminent: "warning",
-	critical: "alert-circle",
+	nolimit: "remove-circle-outline",
+	safe: "shield-checkmark-outline",
+	near: "warning-outline",
+	over: "alert-circle",
 };
-
-// Ticks once a second so the estimate visibly counts down between MQTT pushes
-// instead of jumping every 5 s. Only this node re-renders.
-function EtaValue({ etaSec, sampleAt, style }) {
-	const [, setTick] = useState(0);
-	const active = typeof etaSec === "number" && Number.isFinite(etaSec);
-
-	useEffect(() => {
-		if (!active) return undefined;
-		const id = setInterval(() => setTick((n) => (n + 1) % 1000), 1000);
-		return () => clearInterval(id);
-	}, [active, etaSec, sampleAt]);
-
-	if (!active) return <Text style={style}>--</Text>;
-	const elapsed = sampleAt ? Math.max(0, (Date.now() - sampleAt) / 1000) : 0;
-	return <Text style={style}>{formatDuration(Math.max(0, etaSec - elapsed))}</Text>;
-}
 
 function Stat({ label, value, unit, tone = "muted" }) {
 	const palette = TONES[tone] ?? TONES.muted;
-	// `value` is a plain string for most tiles but a live node for the ETA
-	// countdown, so the accessibility label is built from the readable parts only.
-	const spokenValue =
-		typeof value === "string" || typeof value === "number" ? String(value) : "";
 	return (
 		<View
 			style={[styles.stat, { borderColor: palette.border, backgroundColor: palette.bg }]}
 			accessible
-			accessibilityLabel={`${label} ${spokenValue}${unit ? ` ${unit}` : ""}`}
+			accessibilityLabel={`${label} ${value}${unit ? ` ${unit}` : ""}`}
 		>
 			<Text style={styles.statLabel} numberOfLines={1}>
 				{label}
 			</Text>
 			<View style={styles.statValueRow}>
-				{typeof value === "string" ? (
-					<Text style={[styles.statValue, { color: palette.text }]} numberOfLines={1}>
-						{value}
-					</Text>
-				) : (
-					value
-				)}
+				<Text
+					style={[styles.statValue, { color: palette.text }]}
+					numberOfLines={1}
+					adjustsFontSizeToFit
+				>
+					{value}
+				</Text>
 				{unit ? (
 					<Text style={[styles.statUnit, { color: palette.text }]}>{unit}</Text>
 				) : null}
@@ -79,29 +55,40 @@ function Stat({ label, value, unit, tone = "muted" }) {
 	);
 }
 
+function rateLabel(rate) {
+	if (rate === null || !Number.isFinite(rate)) return "--";
+	// Round small values to zero: showing "-0.0" for a flat reading looks broken.
+	if (Math.abs(rate) < 0.05) return "0.0";
+	return `${rate > 0 ? "+" : ""}${rate.toFixed(1)}`;
+}
+
 export function ThermalGuardCard({ analytics }) {
-	const { samples, stats, trend, projection, anomaly, status, sampleAt, threshold } =
-		analytics;
+	const { samples, stats, rate, proximity, status, anomaly, threshold } = analytics;
 
 	const palette = TONES[status.tone] ?? TONES.muted;
 
-	const crossed = projection?.crossed === true;
-
-	const rateTone = !trend
-		? "muted"
-		: crossed || status.key === "imminent"
+	const rising = typeof rate === "number" && rate > 0.05;
+	const falling = typeof rate === "number" && rate < -0.05;
+	const rateTone =
+		status.key === "over"
 			? "danger"
-			: Math.abs(trend.slopePerMin) > 0.15
+			: proximity?.state === "near"
 				? "warn"
-				: "success";
+				: "muted";
 
-	const etaTone = crossed
-		? "danger"
-		: projection?.willCross
-			? projection.etaSec <= 120
-				? "danger"
-				: "warn"
-			: "muted";
+	const headroom = proximity?.headroom;
+	const marginValue =
+		typeof headroom === "number"
+			? proximity.state === "over"
+				? `+${Math.abs(headroom).toFixed(1)}`
+				: headroom.toFixed(1)
+			: "--";
+	const marginUnit =
+		proximity?.state === "over"
+			? "°C over"
+			: proximity?.state === "unknown"
+				? ""
+				: "°C left";
 
 	return (
 		<View style={styles.card}>
@@ -113,7 +100,7 @@ export function ThermalGuardCard({ analytics }) {
 						{ backgroundColor: palette.bg, borderColor: palette.border },
 					]}
 					accessible
-					accessibilityLabel={`Trend status ${status.label}`}
+					accessibilityLabel={`Status ${status.label}`}
 				>
 					<Ionicons
 						name={STATUS_ICON[status.key] ?? "ellipse"}
@@ -126,49 +113,32 @@ export function ThermalGuardCard({ analytics }) {
 				</View>
 			</View>
 
-			<Sparkline
-				samples={samples}
-				threshold={threshold}
-				projection={projection}
-				tint={palette.text}
-			/>
+			<Sparkline samples={samples} threshold={threshold} tint={palette.text} />
 
 			<View style={styles.statGrid}>
 				<Stat
 					label="Rate"
-					value={
-						trend
-							? `${trend.slopePerMin > 0 ? "+" : ""}${trend.slopePerMin.toFixed(1)}`
-							: "--"
-					}
+					value={rateLabel(rate)}
 					unit="°C/min"
 					tone={rateTone}
 				/>
-				<Stat
-					label="ETA"
-					value={
-						crossed ? (
-							// "0s" read like a broken timer; the limit is already breached,
-							// so say that instead of pretending there is time left.
-							<Text style={[styles.statValue, { color: TONES.danger.text }]}>
-								Over
-							</Text>
-						) : (
-							<EtaValue
-								etaSec={projection?.willCross ? projection.etaSec : null}
-								sampleAt={sampleAt}
-								style={[styles.statValue, { color: TONES[etaTone].text }]}
-							/>
-						)
-					}
-					tone={etaTone}
-				/>
-				<Stat
-					label="Peak"
-					value={stats ? stats.max.toFixed(1) : "--"}
-					unit="°C"
-				/>
+				<Stat label="Margin" value={marginValue} unit={marginUnit} tone={status.tone} />
+				<Stat label="Peak" value={stats ? stats.max.toFixed(1) : "--"} unit="°C" />
 			</View>
+
+			{(rising || falling) && status.key !== "waiting" ? (
+				<View style={styles.trendRow}>
+					<Ionicons
+						name={rising ? "trending-up" : "trending-down"}
+						size={13}
+						color={color.text3}
+					/>
+					<Text style={styles.trendText}>
+						{rising ? "Rising" : "Falling"} {Math.abs(rate).toFixed(1)} °C/min over the
+						last {Math.min(samples.length, 3)} readings
+					</Text>
+				</View>
+			) : null}
 
 			{anomaly?.flag ? (
 				<View
@@ -258,6 +228,16 @@ const styles = StyleSheet.create({
 	statUnit: {
 		fontSize: 11,
 		fontWeight: "600",
+	},
+	trendRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 6,
+	},
+	trendText: {
+		fontSize: 11,
+		color: color.text3,
+		fontVariant: ["tabular-nums"],
 	},
 	anomalyBanner: {
 		flexDirection: "row",
