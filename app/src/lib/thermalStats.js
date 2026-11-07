@@ -8,13 +8,6 @@
 
 export const WINDOW_SIZE = 48; // samples kept for the trace (~4 min at 5 s publish)
 
-// Rate is measured step by step: each value is the change from one reading to
-// the next. The median of the last few steps is used rather than the single
-// latest one, so a noisy reading cannot flip the sign on its own — at ±0.12 °C of
-// sensor noise a single step swings the rate by ±1.4 °C/min, which would make the
-// number flicker between rising and falling while the reading is actually flat.
-export const RATE_STEPS = 3;
-
 // How close counts as "near". One degree is about one sensor step here, so the
 // warning arrives before the limit is crossed but late enough to mean something.
 export const NEAR_MARGIN = 1.0;
@@ -96,28 +89,23 @@ export function describe(samples) {
 }
 
 /**
- * Rate of change in °C per minute, measured step by step.
+ * Change from the previous reading to the current one, in °C.
  *
- * Each step is the change from one reading to the next; the result is the median
- * of the most recent steps, so one noisy sample cannot flip the sign by itself
- * while a real reversal still shows within two readings. Returns null rather than
- * a made-up number when there is nothing to compare against.
+ * Deliberately the plain subtraction, not a rate per minute and not an average:
+ * 10 °C then 20 °C reads +10, and 20 °C then 15 °C reads -5. That is what the
+ * number on screen means, so nothing has to be interpreted or scaled.
+ *
+ * Returns the two readings alongside the difference so the UI can say what it
+ * changed *from*, and null when there is nothing to compare against.
  */
-export function instantRate(samples, steps = RATE_STEPS) {
+export function stepDelta(samples) {
 	if (!Array.isArray(samples) || samples.length < 2) return null;
 
-	const available = Math.min(steps, samples.length - 1);
-	const deltas = [];
-	for (let i = samples.length - available; i < samples.length; i++) {
-		const prev = samples[i - 1];
-		const next = samples[i];
-		const dtSec = (next.t - prev.t) / 1000;
-		if (!Number.isFinite(dtSec) || dtSec <= 0) continue;
-		deltas.push((next.v - prev.v) / dtSec);
-	}
+	const to = samples[samples.length - 1].v;
+	const from = samples[samples.length - 2].v;
+	if (!Number.isFinite(from) || !Number.isFinite(to)) return null;
 
-	if (!deltas.length) return null;
-	return median(deltas) * 60;
+	return { delta: to - from, from, to };
 }
 
 /**

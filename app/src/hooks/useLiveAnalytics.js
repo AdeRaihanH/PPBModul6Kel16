@@ -3,14 +3,14 @@ import {
 	WINDOW_SIZE,
 	describe,
 	detectAnomaly,
-	instantRate,
 	proximity,
+	stepDelta,
 } from "../lib/thermalStats.js";
 
 const EMPTY = {
 	samples: [],
 	stats: null,
-	rate: null,
+	step: null,
 	proximity: { state: "unknown", headroom: null },
 	status: { key: "waiting", label: "Waiting", tone: "muted" },
 	anomaly: null,
@@ -63,7 +63,7 @@ export function useLiveAnalytics({ temperature, timestamp, threshold }) {
 		return {
 			samples,
 			stats: describe(samples),
-			rate: instantRate(samples),
+			step: stepDelta(samples),
 			proximity: prox,
 			status:
 				prox.state === "unknown" && typeof current === "number"

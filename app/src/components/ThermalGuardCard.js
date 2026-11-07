@@ -58,11 +58,14 @@ function Stat({ label, value, unit, tone, tones }) {
 	);
 }
 
-function rateLabel(rate) {
-	if (rate === null || !Number.isFinite(rate)) return "--";
-	// Round small values to zero: showing "-0.0" for a flat reading looks broken.
-	if (Math.abs(rate) < 0.05) return "0.0";
-	return `${rate > 0 ? "+" : ""}${rate.toFixed(1)}`;
+// Plain subtraction, one decimal, always signed. "+10.0" and "-5.0" read exactly
+// like the change they describe, with no unit conversion to interpret.
+function deltaLabel(delta) {
+	if (typeof delta !== "number" || !Number.isFinite(delta)) return "--";
+	// Round tiny values to zero: showing "-0.0" for an unchanged reading looks
+	// broken rather than flat.
+	if (Math.abs(delta) < 0.05) return "0.0";
+	return `${delta > 0 ? "+" : ""}${delta.toFixed(1)}`;
 }
 
 export function ThermalGuardCard({ analytics }) {
@@ -70,12 +73,13 @@ export function ThermalGuardCard({ analytics }) {
 	const styles = useThemedStyles(makeStyles);
 	const tones = buildTones(theme.color);
 
-	const { samples, stats, rate, proximity, status, anomaly, threshold } = analytics;
+	const { samples, stats, step, proximity, status, anomaly, threshold } = analytics;
 
 	const palette = tones[status.tone] ?? tones.muted;
 
-	const rising = typeof rate === "number" && rate > 0.05;
-	const falling = typeof rate === "number" && rate < -0.05;
+	const delta = step?.delta;
+	const rising = typeof delta === "number" && delta > 0.05;
+	const falling = typeof delta === "number" && delta < -0.05;
 	const rateTone =
 		status.key === "over"
 			? "danger"
@@ -125,8 +129,8 @@ export function ThermalGuardCard({ analytics }) {
 			<View style={styles.statGrid}>
 				<Stat
 					label="Rate"
-					value={rateLabel(rate)}
-					unit="°C/min"
+					value={deltaLabel(delta)}
+					unit="°C"
 					tone={rateTone}
 					tones={tones}
 				/>
@@ -154,8 +158,8 @@ export function ThermalGuardCard({ analytics }) {
 						color={theme.color.text3}
 					/>
 					<Text style={styles.trendText}>
-						{rising ? "Rising" : "Falling"} {Math.abs(rate).toFixed(1)} °C/min over the
-						last {Math.min(samples.length, 3)} readings
+						{rising ? "Up" : "Down"} {Math.abs(delta).toFixed(1)} °C from{" "}
+						{step.from.toFixed(1)} °C to {step.to.toFixed(1)} °C
 					</Text>
 				</View>
 			) : null}

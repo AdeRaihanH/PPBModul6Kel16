@@ -133,7 +133,7 @@ Everything runs on-device from the live MQTT stream.
 
 | Tile | Meaning |
 |---|---|
-| **Rate** | °C per minute, measured from one reading to the next |
+| **Rate** | °C change from the previous reading |
 | **Margin** | How many degrees are left before the limit, or how far past it |
 | **Peak** | Highest reading in the window |
 
@@ -190,12 +190,13 @@ bound rather than erroring.
 the maths is testable in isolation.
 
 - **Rolling window** of 48 samples (~4 min at the 5 s publish rate) for the chart.
-- **Rate** is measured step by step: each value is the change from one reading to
-  the next, and the result is the **median of the last three steps**. A single
-  step is not used directly because at ±0.12 °C of sensor noise one sample swings
-  the rate by ±1.4 °C/min, which would flicker between rising and falling while
-  the reading is actually flat. The median rejects that without the lag of a long
-  fit: a real reversal shows within two readings.
+- **Rate** is the plain difference between the last two readings, in °C: 10 °C then
+  20 °C reads `+10`, and 20 °C then 15 °C reads `-5`. Deliberately not a rate per
+  minute and not an average — the number means exactly the subtraction it shows, so
+  there is nothing to interpret. The trade-off is that it is as noisy as the
+  sensor: one jumpy sample moves it fully. The trend line names both readings
+  (`Up 10.0 °C from 10.0 °C to 20.0 °C`) so the movement stays legible even when
+  the value swings.
 - **Proximity** compares the current reading with the threshold. The 1 °C "near"
   band is roughly one sensor step, so the warning arrives before the limit is
   crossed but late enough to mean something.
@@ -224,7 +225,7 @@ the maths is testable in isolation.
 app/src/theme/tokens.js                 light and dark palettes
 app/src/theme/scheme.js                 preference resolution (pure, tested)
 app/src/theme/ThemeProvider.js          scheme context, persistence, style cache
-app/src/lib/thermalStats.js             rate, proximity, anomaly (pure)
+app/src/lib/thermalStats.js             step delta, proximity, anomaly (pure)
 app/src/hooks/useLiveAnalytics.js       accumulates the MQTT feed, derives the view
 app/src/hooks/useBackendHealth.js       polls /api/health
 app/src/components/Sparkline.js         Skia trace with the limit rule
