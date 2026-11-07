@@ -50,15 +50,28 @@ extra network calls, no server changes.
 
 ### What it shows
 
+Three tiles, one line each:
+
 | Tile | Meaning |
 |---|---|
 | **Rate** | °C per minute, from a least-squares fit over the rolling window |
-| **ETA to limit** | Seconds until the fitted trend reaches the threshold, counting down live |
-| **Volatility** | Standard deviation of the window, plus its range |
-| **Window peak** | Highest reading in the window and how many samples it covers |
+| **ETA** | Time until the fitted trend reaches the threshold, counting down live |
+| **Peak** | Highest reading in the window |
 
 Plus a live trace with the threshold as a dashed rule, the projected crossing as
 a dotted continuation, and an anomaly banner when a reading breaks the trend.
+
+### Seeing the ETA work
+
+The default simulator sends an independent random number every 5 s, so there is
+no trend to project and the ETA correctly stays blank. To demonstrate it:
+
+```bash
+cd sensor-simulator
+npm start -- --trend      # 24 → 32 °C ramp, repeats
+```
+
+That is the same app code path — only the shape of the incoming data changes.
 
 ### The statistics
 
@@ -99,4 +112,5 @@ app/src/hooks/useLiveAnalytics.js    accumulates the MQTT feed, derives the view
 app/src/components/Sparkline.js      Skia trace, threshold rule, projection
 app/src/components/ThermalGuardCard.js  the panel
 app/src/screens/MonitoringScreen.js  wires it to the live sensor
+sensor-simulator/temperature.js      random and trend sample generators
 ```

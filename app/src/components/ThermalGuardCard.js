@@ -48,7 +48,7 @@ function EtaValue({ etaSec, sampleAt, style }) {
 	return <Text style={style}>{formatDuration(Math.max(0, etaSec - elapsed))}</Text>;
 }
 
-function Stat({ label, value, unit, hint, tone = "muted" }) {
+function Stat({ label, value, unit, tone = "muted" }) {
 	const palette = TONES[tone] ?? TONES.muted;
 	// `value` is a plain string for most tiles but a live node for the ETA
 	// countdown, so the accessibility label is built from the readable parts only.
@@ -58,9 +58,7 @@ function Stat({ label, value, unit, hint, tone = "muted" }) {
 		<View
 			style={[styles.stat, { borderColor: palette.border, backgroundColor: palette.bg }]}
 			accessible
-			accessibilityLabel={`${label} ${spokenValue}${unit ? ` ${unit}` : ""}${
-				hint ? `, ${hint}` : ""
-			}`}
+			accessibilityLabel={`${label} ${spokenValue}${unit ? ` ${unit}` : ""}`}
 		>
 			<Text style={styles.statLabel} numberOfLines={1}>
 				{label}
@@ -77,28 +75,15 @@ function Stat({ label, value, unit, hint, tone = "muted" }) {
 					<Text style={[styles.statUnit, { color: palette.text }]}>{unit}</Text>
 				) : null}
 			</View>
-			<Text style={styles.statHint} numberOfLines={1}>
-				{hint ?? " "}
-			</Text>
 		</View>
 	);
 }
 
 export function ThermalGuardCard({ analytics }) {
-	const {
-		samples,
-		stats,
-		trend,
-		projection,
-		anomaly,
-		status,
-		sampleAt,
-		current,
-		threshold,
-	} = analytics;
+	const { samples, stats, trend, projection, anomaly, status, sampleAt, threshold } =
+		analytics;
 
 	const palette = TONES[status.tone] ?? TONES.muted;
-	const rising = trend ? trend.slopePerMin > 0 : false;
 
 	const rateTone = !trend
 		? "muted"
@@ -117,18 +102,10 @@ export function ThermalGuardCard({ analytics }) {
 					: "warn"
 				: "muted";
 
-	const confidencePct = trend ? Math.round(trend.confidence * 100) : null;
-	const spanLabel = stats ? formatDuration(stats.spanSec) : null;
-
 	return (
 		<View style={styles.card}>
 			<View style={styles.headerRow}>
-				<View style={styles.headerTextWrap}>
-					<Text style={styles.eyebrow}>Thermal guard</Text>
-					<Text style={styles.subtitle}>
-						Predictive view over the live sensor feed
-					</Text>
-				</View>
+				<Text style={styles.title}>Thermal Guard</Text>
 				<View
 					style={[
 						styles.statusPill,
@@ -160,15 +137,14 @@ export function ThermalGuardCard({ analytics }) {
 					label="Rate"
 					value={
 						trend
-							? `${trend.slopePerMin > 0 ? "+" : ""}${trend.slopePerMin.toFixed(2)}`
+							? `${trend.slopePerMin > 0 ? "+" : ""}${trend.slopePerMin.toFixed(1)}`
 							: "--"
 					}
 					unit="°C/min"
-					hint={confidencePct !== null ? `fit R² ${confidencePct}%` : "collecting"}
 					tone={rateTone}
 				/>
 				<Stat
-					label="ETA to limit"
+					label="ETA"
 					value={
 						<EtaValue
 							etaSec={projection?.willCross ? projection.etaSec : null}
@@ -176,33 +152,12 @@ export function ThermalGuardCard({ analytics }) {
 							style={[styles.statValue, { color: TONES[etaTone].text }]}
 						/>
 					}
-					hint={
-						projection?.willCross
-							? "projected crossing"
-							: !projection
-								? "collecting"
-								: rising
-									? "below confidence"
-									: "no upward trend"
-					}
 					tone={etaTone}
 				/>
 				<Stat
-					label="Volatility"
-					value={stats ? stats.std.toFixed(2) : "--"}
+					label="Peak"
+					value={stats ? stats.max.toFixed(1) : "--"}
 					unit="°C"
-					hint={stats ? `range ${(stats.max - stats.min).toFixed(1)}°C` : "collecting"}
-				/>
-				<Stat
-					label="Window peak"
-					value={stats ? stats.max.toFixed(2) : "--"}
-					unit="°C"
-					hint={stats ? `${stats.count} samples` : "collecting"}
-					tone={
-						typeof current === "number" && stats && current >= stats.max
-							? "warn"
-							: "muted"
-					}
 				/>
 			</View>
 
@@ -217,19 +172,10 @@ export function ThermalGuardCard({ analytics }) {
 				>
 					<Ionicons name="pulse-outline" size={16} color={color.warnText} />
 					<Text style={styles.anomalyText}>
-						Sensor anomaly — latest sample is {anomaly.score.toFixed(1)}σ off the
-						trend (robust MAD). Treat as noise until the next reading confirms it.
+						Sensor anomaly — {anomaly.score.toFixed(1)}σ off the trend.
 					</Text>
 				</View>
 			) : null}
-
-			<Text style={styles.footer}>
-				{stats
-					? `${stats.count} live samples · ${spanLabel} window · avg ${stats.avg.toFixed(
-							2,
-						)}°C`
-					: "Waiting for the first sensor readings…"}
-			</Text>
 		</View>
 	);
 }
@@ -237,7 +183,7 @@ export function ThermalGuardCard({ analytics }) {
 const styles = StyleSheet.create({
 	card: {
 		backgroundColor: color.surface,
-		padding: space.xl,
+		padding: space.lg,
 		borderRadius: radius.card,
 		borderCurve: "continuous",
 		borderWidth: 1,
@@ -247,24 +193,14 @@ const styles = StyleSheet.create({
 	},
 	headerRow: {
 		flexDirection: "row",
-		alignItems: "flex-start",
+		alignItems: "center",
 		justifyContent: "space-between",
-		gap: space.md,
+		gap: space.sm,
 	},
-	headerTextWrap: {
-		flex: 1,
-		gap: 2,
-	},
-	eyebrow: {
-		fontSize: 12,
-		fontWeight: "600",
-		textTransform: "uppercase",
-		letterSpacing: 0.8,
-		color: color.text3,
-	},
-	subtitle: {
-		fontSize: 13,
-		color: color.text2,
+	title: {
+		fontSize: tokens.type.section,
+		fontWeight: "700",
+		color: color.text,
 	},
 	statusPill: {
 		flexDirection: "row",
@@ -282,17 +218,15 @@ const styles = StyleSheet.create({
 	},
 	statGrid: {
 		flexDirection: "row",
-		flexWrap: "wrap",
 		gap: space.sm,
 	},
 	stat: {
-		flexGrow: 1,
-		flexBasis: "46%",
+		flex: 1,
 		borderWidth: 1,
 		borderRadius: radius.input,
 		borderCurve: "continuous",
 		paddingVertical: 10,
-		paddingHorizontal: 12,
+		paddingHorizontal: 10,
 		gap: 2,
 	},
 	statLabel: {
@@ -305,42 +239,31 @@ const styles = StyleSheet.create({
 	statValueRow: {
 		flexDirection: "row",
 		alignItems: "baseline",
-		gap: 4,
+		gap: 3,
 	},
 	statValue: {
-		fontSize: 19,
+		fontSize: 18,
 		fontWeight: "700",
 		fontVariant: ["tabular-nums"],
 	},
 	statUnit: {
-		fontSize: 12,
-		fontWeight: "600",
-	},
-	statHint: {
 		fontSize: 11,
-		color: color.text3,
-		fontVariant: ["tabular-nums"],
+		fontWeight: "600",
 	},
 	anomalyBanner: {
 		flexDirection: "row",
-		alignItems: "flex-start",
+		alignItems: "center",
 		gap: space.sm,
 		backgroundColor: color.warnBg,
 		borderWidth: 1,
 		borderColor: color.warnBorder,
 		borderRadius: radius.input,
 		borderCurve: "continuous",
-		padding: space.md,
+		padding: space.sm,
 	},
 	anomalyText: {
 		flex: 1,
 		fontSize: 12,
-		lineHeight: 17,
 		color: color.warnText,
-	},
-	footer: {
-		fontSize: 11,
-		color: color.text3,
-		fontVariant: ["tabular-nums"],
 	},
 });
