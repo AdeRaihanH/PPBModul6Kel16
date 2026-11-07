@@ -18,7 +18,6 @@ import Animated, {
 import { useMqttSensor } from "../hooks/useMqttSensor.js";
 import { useLiveAnalytics } from "../hooks/useLiveAnalytics.js";
 import { useBackendHealth } from "../hooks/useBackendHealth.js";
-import { useAlarmNotifications } from "../hooks/useAlarmNotifications.js";
 import { Api } from "../services/api.js";
 import { DataTable } from "../components/DataTable.js";
 import { TempOrb } from "../components/TempOrb.js";
@@ -133,14 +132,9 @@ export function MonitoringScreen() {
 		threshold: latestThreshold,
 	});
 	const backend = useBackendHealth();
-	const alarms = useAlarmNotifications({
-		status: analytics.status,
-		temperature: analytics.current,
-		threshold: analytics.threshold,
-	});
 
-	// Haptic on the crossing itself, so the phone reacts even when the app is the
-	// thing being looked at and a notification banner would be redundant.
+	// Haptic on the crossing itself. This is the only alert the app raises, and it
+	// needs no permission: it works the moment the reading crosses the limit.
 	const wasOverRef = useRef(false);
 	useEffect(() => {
 		const over = analytics.status.key === "over";
@@ -408,20 +402,6 @@ export function MonitoringScreen() {
 				</Animated.View>
 
 				<ThermalGuardCard analytics={analytics} />
-
-				{alarms.permission === "denied" ? (
-					<View style={styles.noticeRow} accessible accessibilityRole="text">
-						<Ionicons
-							name="notifications-off-outline"
-							size={15}
-							color={theme.color.text3}
-						/>
-						<Text style={styles.noticeText}>
-							Notifications are off, so a breach only shows on this screen. Allow them
-							in system settings to be alerted in the background.
-						</Text>
-					</View>
-				) : null}
 
 				{apiError && !loading ? (
 					<View
@@ -707,18 +687,6 @@ const makeStyles = ({ color, space, radius, shadow, type, hit }) =>
 	},
 	rangeChipTextActive: {
 		color: color.onPrimary,
-	},
-	noticeRow: {
-		flexDirection: "row",
-		alignItems: "flex-start",
-		gap: space.sm,
-		paddingHorizontal: space.sm,
-	},
-	noticeText: {
-		flex: 1,
-		fontSize: 12,
-		lineHeight: 17,
-		color: color.text3,
 	},
 	errorBanner: {
 		flexDirection: "row",

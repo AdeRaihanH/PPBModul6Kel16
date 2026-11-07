@@ -164,19 +164,17 @@ removed deliberately, for two reasons found by testing it:
 The panel now reports only what was measured. There is no projection line on the
 chart for the same reason.
 
-### Notifications
+### Alerts
 
-Crossing the limit fires one local notification, so a breach is not silent when
-the phone is in your pocket. `app/src/lib/alarmTrigger.js` holds the policy as a
-pure function: one per crossing, never repeated while the reading stays above the
-limit, and a 60 s cooldown so a reading oscillating around the threshold cannot
-produce a storm.
+Crossing the limit fires one notification haptic — a single buzz, not a stream, so
+it does not become background noise. This is the whole alert path: no permission
+prompt, no dependency, and it works in Expo Go.
 
-Honest limitation: the alert runs on the JS thread, so it fires while the app is
-alive. Alerting with the app fully closed needs a server-side push, which requires
-a development build (Expo Go cannot receive remote notifications on Android since
-SDK 53). If notification permission is denied, the Monitoring screen says so
-instead of failing silently.
+A push notification was tried and removed. Local notifications do work in Expo Go,
+but they only fire while the app is alive, and alerting with the app fully closed
+needs a server-side push, which requires a development build — Expo Go cannot
+receive remote notifications on Android since SDK 53. A feature that looks present
+but stays silent during a demo is worse than not having it.
 
 ### Alarm history filter
 
@@ -227,11 +225,8 @@ app/src/theme/tokens.js                 light and dark palettes
 app/src/theme/scheme.js                 preference resolution (pure, tested)
 app/src/theme/ThemeProvider.js          scheme context, persistence, style cache
 app/src/lib/thermalStats.js             rate, proximity, anomaly (pure)
-app/src/lib/alarmTrigger.js             when to notify, and the wording (pure)
 app/src/hooks/useLiveAnalytics.js       accumulates the MQTT feed, derives the view
-app/src/hooks/useAlarmNotifications.js  one notification per crossing
 app/src/hooks/useBackendHealth.js       polls /api/health
-app/src/services/notifications.js       permission, Android channel, local alert
 app/src/components/Sparkline.js         Skia trace with the limit rule
 app/src/components/ThermalGuardCard.js  the panel
 app/src/screens/MonitoringScreen.js     wires it to the live sensor
