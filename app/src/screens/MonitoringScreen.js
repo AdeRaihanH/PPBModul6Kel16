@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	Pressable,
 	RefreshControl,
@@ -9,15 +9,18 @@ import {
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import * as Haptics from "expo-haptics";
 import Animated, {
 	FadeIn,
 	FadeInDown,
 	useReducedMotion,
 } from "react-native-reanimated";
 import { useMqttSensor } from "../hooks/useMqttSensor.js";
+import { useLiveAnalytics } from "../hooks/useLiveAnalytics.js";
 import { Api } from "../services/api.js";
 import { DataTable } from "../components/DataTable.js";
 import { TempOrb } from "../components/TempOrb.js";
+import { ThermalGuardCard } from "../components/ThermalGuardCard.js";
 import { tokens } from "../theme/tokens.js";
 
 const { color, space, radius, shadow } = tokens;
@@ -108,6 +111,28 @@ export function MonitoringScreen() {
 	const [refreshing, setRefreshing] = useState(false);
 	const [apiError, setApiError] = useState(null);
 	const reduceMotion = useReducedMotion();
+
+	const analytics = useLiveAnalytics({
+		temperature,
+		timestamp,
+		threshold: latestThreshold,
+	});
+
+	// Escalate with a notification haptic the moment the limit is breached,
+	// once per crossing rather than on every sample that stays above it.
+	const wasOverRef = useRef(false);
+	useEffect(() => {
+		const over =
+			typeof temperature === "number" &&
+			typeof latestThreshold === "number" &&
+			temperature >= latestThreshold;
+		if (over && !wasOverRef.current) {
+			Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
+				() => {},
+			);
+		}
+		wasOverRef.current = over;
+	}, [temperature, latestThreshold]);
 
 	const fetchReadings = useCallback(async () => {
 		setLoading(true);
@@ -329,6 +354,8 @@ export function MonitoringScreen() {
 						</View>
 					) : null}
 				</Animated.View>
+
+				<ThermalGuardCard analytics={analytics} />
 
 				{apiError && !loading ? (
 					<View
