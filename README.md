@@ -87,27 +87,38 @@ cd backend && node scripts/check-idempotency.mjs   # writes, retries, cleans up
 
 ## Dark mode
 
-Both schemes are first-class: the light and dark palettes live in
-`app/src/theme/tokens.js`, and every colour is read through `useTheme()`.
+Two ways to switch, because they serve different moments:
+
+- **Header switch**, on every screen — one tap flips to the opposite of what is on
+  screen and keeps it. 56×30 with a sliding knob, so the state is readable without
+  relying on the icons.
+- **Control → Appearance** — three explicit choices: **System**, **Light**, **Dark**.
+  "System" is a real option, not the absence of one, so a user who pinned dark on a
+  light phone can hand control back to the OS without clearing app data.
+
+Both schemes are first-class: the palettes live in `app/src/theme/tokens.js`, and
+every colour is read through `useTheme()`. The resolution logic is pure and lives
+in `app/src/theme/scheme.js` (`normalizePreference`, `resolveScheme`, `flipScheme`),
+so the switching behaviour is tested without a device.
 
 Three decisions worth knowing:
 
 - **Styles are factories, not constants.** A `StyleSheet.create` at module scope
   freezes its colours at import time, so it can never follow a theme change. Each
-  file now exposes `makeStyles(theme)` and consumes it with
-  `useThemedStyles(makeStyles)`, which caches one sheet per (theme, factory) pair —
-  so switching schemes rebuilds styles once, not on every render.
-- **The header has one toggle.** It flips to the opposite of what is on screen and
-  stops following the system from then on. The choice is stored in AsyncStorage
-  under `livetemp.theme`; with nothing stored the app follows the OS setting
-  (`userInterfaceStyle: "automatic"` in `app.json`).
+  file exposes `makeStyles(theme)` and consumes it with `useThemedStyles(makeStyles)`,
+  which caches one sheet per (theme, factory) pair — so switching schemes rebuilds
+  styles once, not on every render.
+- **The choice persists.** Stored in AsyncStorage under `livetemp.theme`. With
+  nothing stored the app follows the OS setting (`userInterfaceStyle: "automatic"`).
 - **Dark is not light inverted.** The dark palette uses desaturated tints and
   off-white text, because pure white on near-black haloes. Both palettes are
   checked for WCAG AA contrast (text 14:1 on surface in dark, buttons 5.8:1).
 
 The theme checks also guard the failure mode that is easiest to miss: a token
 defined in one palette and missing from the other, which renders as an undefined
-colour in exactly one scheme.
+colour in exactly one scheme. `npm run check:scope` catches the other one — a
+style factory referencing a variable it never received, which compiles and bundles
+fine and only throws when the factory first runs.
 
 ## Thermal Guard
 
@@ -213,6 +224,7 @@ the maths is testable in isolation.
 
 ```
 app/src/theme/tokens.js                 light and dark palettes
+app/src/theme/scheme.js                 preference resolution (pure, tested)
 app/src/theme/ThemeProvider.js          scheme context, persistence, style cache
 app/src/lib/thermalStats.js             rate, proximity, anomaly (pure)
 app/src/lib/alarmTrigger.js             when to notify, and the wording (pure)

@@ -9,8 +9,13 @@ import {
 } from "react";
 import { useColorScheme } from "react-native";
 import { createTheme } from "./tokens.js";
-
-const STORAGE_KEY = "livetemp.theme";
+import {
+	SCHEME_STORAGE_KEY,
+	flipScheme,
+	normalizePreference,
+	resolveScheme,
+	serializePreference,
+} from "./scheme.js";
 
 // AsyncStorage is bundled in Expo Go, but a missing native module must not take
 // the whole app down — the theme simply falls back to following the system.
@@ -24,19 +29,19 @@ try {
 const ThemeContext = createContext(null);
 
 async function readPreference() {
-	if (!storage) return null;
+	if (!storage) return "system";
 	try {
-		const value = await storage.getItem(STORAGE_KEY);
-		return value === "light" || value === "dark" ? value : null;
+		const value = await storage.getItem(SCHEME_STORAGE_KEY);
+		return normalizePreference(value);
 	} catch {
-		return null;
+		return "system";
 	}
 }
 
 async function writePreference(value) {
 	if (!storage) return;
 	try {
-		await storage.setItem(STORAGE_KEY, value);
+		await storage.setItem(SCHEME_STORAGE_KEY, serializePreference(value));
 	} catch {
 		// Persisting is a nicety; failing to save must not break the toggle.
 	}
@@ -44,38 +49,41 @@ async function writePreference(value) {
 
 export function ThemeProvider({ children }) {
 	const systemScheme = useColorScheme();
-	// `null` means "follow the system". Stored as a ref too so the toggle can read
-	// the latest value without re-creating its callback on every render.
-	const [preference, setPreferenceState] = useState(null);
-	const preferenceRef = useRef(null);
+	const [preference, setPreferenceState] = useState("system");
+	const [loaded, setLoaded] = useState(false);
+	// Mirrors `preference` so callbacks can read the latest value without being
+	// re-created on every change.
+	const preferenceRef = useRef("system");
 
 	useEffect(() => {
 		let cancelled = false;
 		readPreference().then((stored) => {
-			if (cancelled || !stored) return;
+			if (cancelled) return;
 			preferenceRef.current = stored;
 			setPreferenceState(stored);
+			setLoaded(true);
 		});
 		return () => {
 			cancelled = true;
 		};
 	}, []);
 
-	const scheme = preference ?? (systemScheme === "dark" ? "dark" : "light");
+	const scheme = resolveScheme(preference, systemScheme);
 	const theme = useMemo(() => createTheme(scheme), [scheme]);
 
 	const setPreference = useCallback((next) => {
-		const value = next === "light" || next === "dark" ? next : null;
+		const value = normalizePreference(next);
 		preferenceRef.current = value;
 		setPreferenceState(value);
-		writePreference(value ?? "system");
+		writePreference(value);
 	}, []);
 
-	// One button, predictable behaviour: flip to the opposite of what is on screen
-	// right now, and stop following the system from then on.
+	// Header button: flip to the opposite of what is on screen, and keep it. If
+	// the app was following the system, this pins an explicit choice — which is
+	// what someone tapping a light/dark button expects.
 	const toggle = useCallback(() => {
-		const current = preferenceRef.current ?? (systemScheme === "dark" ? "dark" : "light");
-		setPreference(current === "dark" ? "light" : "dark");
+		const current = resolveScheme(preferenceRef.current, systemScheme);
+		setPreference(flipScheme(current));
 	}, [setPreference, systemScheme]);
 
 	const value = useMemo(
@@ -83,11 +91,13 @@ export function ThemeProvider({ children }) {
 			theme,
 			scheme,
 			preference,
-			followsSystem: preference === null,
+			loaded,
+			followsSystem: preference === "system",
+			systemScheme: systemScheme === "dark" ? "dark" : "light",
 			setPreference,
 			toggle,
 		}),
-		[theme, scheme, preference, setPreference, toggle],
+		[theme, scheme, preference, loaded, systemScheme, setPreference, toggle],
 	);
 
 	return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

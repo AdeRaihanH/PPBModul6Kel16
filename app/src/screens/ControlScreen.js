@@ -15,11 +15,17 @@ import { useFocusEffect } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Api } from "../services/api.js";
 import { DataTable } from "../components/DataTable.js";
-import { useTheme, useThemedStyles } from "../theme/ThemeProvider.js";
-
+import { useTheme, useThemeContext, useThemedStyles } from "../theme/ThemeProvider.js";
+import { PREFERENCES, PREFERENCE_LABEL } from "../theme/scheme.js";
 
 const MIN_THRESHOLD = -50;
 const MAX_THRESHOLD = 100;
+
+const PREFERENCE_ICON = {
+  system: "phone-portrait-outline",
+  light: "sunny-outline",
+  dark: "moon-outline",
+};
 
 function parseThreshold(text) {
   const normalized = text.trim().replace(",", ".");
@@ -31,6 +37,7 @@ function parseThreshold(text) {
 export function ControlScreen() {
   const theme = useTheme();
   const styles = useThemedStyles(makeStyles);
+  const { preference, scheme, systemScheme, setPreference } = useThemeContext();
   const [thresholdText, setThresholdText] = useState("30");
   const [note, setNote] = useState("");
   const [touched, setTouched] = useState({ threshold: false });
@@ -265,6 +272,63 @@ export function ControlScreen() {
             emptyTitle="No thresholds yet"
             emptyMessage="Save your first threshold above."
           />
+
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Appearance</Text>
+          </View>
+
+          <View style={styles.appearanceCard}>
+            <Text style={styles.appearanceHint}>
+              {preference === "system"
+                ? `Following your device setting (currently ${systemScheme}).`
+                : `Pinned to ${preference} mode.`}
+            </Text>
+
+            <View style={styles.preferenceRow} accessibilityRole="radiogroup">
+              {PREFERENCES.map((key) => {
+                const active = preference === key;
+                return (
+                  <Pressable
+                    key={key}
+                    onPress={() => setPreference(key)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={`${PREFERENCE_LABEL[key]} appearance`}
+                    accessibilityHint={
+                      key === "system"
+                        ? "Follows the device light or dark setting"
+                        : `Always use ${PREFERENCE_LABEL[key].toLowerCase()} mode`
+                    }
+                    hitSlop={6}
+                    style={({ pressed }) => [
+                      styles.preferenceOption,
+                      active && styles.preferenceOptionActive,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Ionicons
+                      name={PREFERENCE_ICON[key]}
+                      size={16}
+                      color={active ? theme.color.onPrimary : theme.color.text2}
+                    />
+                    <Text
+                      style={[
+                        styles.preferenceLabel,
+                        active && styles.preferenceLabelActive,
+                      ]}
+                    >
+                      {PREFERENCE_LABEL[key]}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text style={styles.appearanceFootnote}>
+              Active: {scheme === "dark" ? "Dark" : "Light"} · you can also tap the
+              switch in the header from any screen.
+            </Text>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -273,6 +337,54 @@ export function ControlScreen() {
 
 const makeStyles = ({ color, space, radius, shadow, type, hit }) =>
   StyleSheet.create({
+  appearanceCard: {
+    backgroundColor: color.surface,
+    borderWidth: 1,
+    borderColor: color.border,
+    borderRadius: radius.card,
+    borderCurve: "continuous",
+    padding: space.lg,
+    gap: space.md,
+    boxShadow: shadow.card,
+  },
+  appearanceHint: {
+    fontSize: 13,
+    color: color.text2,
+  },
+  preferenceRow: {
+    flexDirection: "row",
+    gap: space.sm,
+  },
+  preferenceOption: {
+    flex: 1,
+    minHeight: hit,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderColor: color.border,
+    borderRadius: radius.input,
+    borderCurve: "continuous",
+    backgroundColor: color.surface2,
+    paddingVertical: 10,
+  },
+  preferenceOptionActive: {
+    backgroundColor: color.primary,
+    borderColor: color.primary,
+  },
+  preferenceLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: color.text2,
+  },
+  preferenceLabelActive: {
+    color: color.onPrimary,
+  },
+  appearanceFootnote: {
+    fontSize: 12,
+    color: color.text3,
+  },
   safe: {
     flex: 1,
     backgroundColor: color.bg,

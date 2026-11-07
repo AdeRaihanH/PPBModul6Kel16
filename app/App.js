@@ -19,27 +19,31 @@ const Tab = createBottomTabNavigator();
 
 enableScreens(true);
 
-// Header button: one tap flips between light and dark and stops following the
-// system, which is what people expect from a single control.
+// Header button: one tap flips between light and dark. The track is deliberately
+// large enough to hit comfortably, and the knob slides so the state is readable at
+// a glance without relying on the icons alone.
 function ThemeToggle() {
 	const theme = useTheme();
 	const { scheme, toggle } = useThemeContext();
 	const next = scheme === "dark" ? "light" : "dark";
+	const isDark = scheme === "dark";
 
 	return (
 		<Pressable
 			onPress={toggle}
-			accessibilityRole="button"
-			accessibilityLabel={`Switch to ${next} mode`}
-			hitSlop={12}
+			accessibilityRole="switch"
+			accessibilityState={{ checked: isDark }}
+			accessibilityLabel={`Dark mode ${isDark ? "on" : "off"}`}
+			accessibilityHint={`Switches to ${next} mode`}
+			hitSlop={10}
 			style={({ pressed }) => [styles.toggle, pressed && styles.pressed]}
 		>
 			<View
 				style={[
 					styles.toggleTrack,
 					{
-						backgroundColor: theme.color.surface2,
-						borderColor: theme.color.border,
+						backgroundColor: isDark ? theme.color.primary : theme.color.surface2,
+						borderColor: isDark ? theme.color.primary : theme.color.border,
 					},
 				]}
 			>
@@ -47,21 +51,21 @@ function ThemeToggle() {
 					style={[
 						styles.toggleKnob,
 						{
-							backgroundColor: theme.color.surface,
-							transform: [{ translateX: scheme === "dark" ? 18 : 0 }],
+							backgroundColor: isDark ? theme.color.onPrimary : theme.color.surface,
+							transform: [{ translateX: isDark ? 22 : 0 }],
 						},
 					]}
 				/>
 				<Ionicons
 					name="sunny-outline"
-					size={11}
-					color={scheme === "dark" ? theme.color.text3 : theme.color.warnText}
+					size={13}
+					color={isDark ? theme.color.onPrimary : theme.color.warnText}
 					style={styles.toggleIcon}
 				/>
 				<Ionicons
 					name="moon-outline"
-					size={11}
-					color={scheme === "dark" ? theme.color.primary : theme.color.text3}
+					size={13}
+					color={isDark ? theme.color.onPrimary : theme.color.text3}
 					style={styles.toggleIcon}
 				/>
 			</View>
@@ -149,28 +153,28 @@ export default function App() {
 const styles = StyleSheet.create({
 	toggle: {
 		marginRight: 12,
-		minHeight: 32,
+		minHeight: 44,
 		justifyContent: "center",
 	},
 	toggleTrack: {
-		width: 44,
-		height: 24,
+		width: 56,
+		height: 30,
 		borderRadius: 999,
 		borderWidth: 1,
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-around",
-		paddingHorizontal: 3,
+		paddingHorizontal: 4,
 	},
 	toggleKnob: {
 		position: "absolute",
-		left: 3,
-		width: 18,
-		height: 18,
-		borderRadius: 9,
+		left: 4,
+		width: 22,
+		height: 22,
+		borderRadius: 11,
 	},
 	toggleIcon: {
-		opacity: 0.9,
+		opacity: 0.95,
 	},
 	pressed: {
 		opacity: 0.7,
