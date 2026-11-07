@@ -1,7 +1,7 @@
 import mqtt from "mqtt";
 
 const BROKER_URL = "mqtt://broker.hivemq.com:1883";
-const TOPIC = "ppb/kelXX/iot/temperature";
+const TOPIC = "ppb/kel16/iot/temperature";
 const BACKEND_BASE_URL = "http://localhost:5002";
 const PUBLISH_INTERVAL_MS = 5000;
 
