@@ -21,9 +21,7 @@ import {
   withTiming,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
-import { tokens } from "../theme/tokens.js";
-
-const { color } = tokens;
+import { useTheme } from "../theme/ThemeProvider.js";
 
 const DOT_COUNT = 240;
 const HOLE_RADIUS = 78;
@@ -77,12 +75,11 @@ function projectAll(angle, swell, R, cx, cy) {
   return out;
 }
 
-export function TempOrb({
-  tint = color.text,
-  beatKey = 0,
-  size = 200,
-  dimmed = false,
-}) {
+export function TempOrb({ tint, beatKey = 0, size = 200, dimmed = false }) {
+  const theme = useTheme();
+  // Falls back to the theme's text colour when the caller has no opinion, so the
+  // orb is visible in both schemes without every call site passing a colour.
+  const resolvedTint = tint ?? theme.color.text;
   const reduceMotion = useReducedMotion();
   const focused = useIsFocused();
   const angleY = useSharedValue(0.6);
@@ -199,7 +196,10 @@ export function TempOrb({
 
   const groupOpacity = useDerivedValue(() => 0.7 * (1 - 0.55 * dimSV.value));
 
-  const colors = useMemo(() => new Array(DOT_COUNT).fill(tint), [tint]);
+  const colors = useMemo(
+    () => new Array(DOT_COUNT).fill(resolvedTint),
+    [resolvedTint]
+  );
 
   return (
     <View style={{ width: size, height: size }} accessible={false}>

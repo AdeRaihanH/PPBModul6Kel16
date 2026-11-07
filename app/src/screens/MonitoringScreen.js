@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	Pressable,
 	RefreshControl,
@@ -9,22 +9,37 @@ import {
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import * as Haptics from "expo-haptics";
 import Animated, {
 	FadeIn,
 	FadeInDown,
 	useReducedMotion,
 } from "react-native-reanimated";
 import { useMqttSensor } from "../hooks/useMqttSensor.js";
+import { useLiveAnalytics } from "../hooks/useLiveAnalytics.js";
+import { useBackendHealth } from "../hooks/useBackendHealth.js";
 import { Api } from "../services/api.js";
 import { DataTable } from "../components/DataTable.js";
 import { TempOrb } from "../components/TempOrb.js";
+import { ThermalGuardCard } from "../components/ThermalGuardCard.js";
 import { useLanguage } from "../i18n/LanguageProvider.js";
-import { tokens } from "../theme/tokens.js";
+import { useTheme, useThemedStyles } from "../theme/ThemeProvider.js";
 
-const { color, space, radius, shadow } = tokens;
+// History ranges. `ms: null` means no lower bound. Labels are translated at
+// render time via i18n keys.
+const RANGES = [
+	{ key: "15m", labelKey: "monitoring.range15m", ms: 15 * 60 * 1000 },
+	{ key: "1h", labelKey: "monitoring.range1h", ms: 60 * 60 * 1000 },
+	{ key: "6h", labelKey: "monitoring.range6h", ms: 6 * 60 * 60 * 1000 },
+	{ key: "all", labelKey: "monitoring.rangeAll", ms: null },
+];
+const DEFAULT_RANGE = "1h";
+const HISTORY_LIMIT = 200;
 
 function StatusChip({ connectionState, hasError, onRetry }) {
+	const theme = useTheme();
 	const { t } = useLanguage();
+	const styles = useThemedStyles(makeStyles);
 	const config = useMemo(() => {
 		if (
 			hasError ||
@@ -32,33 +47,36 @@ function StatusChip({ connectionState, hasError, onRetry }) {
 			connectionState === "disconnected"
 		) {
 			return {
-				bg: color.dangerBg,
-				border: color.dangerBorder,
-				text: color.dangerText,
-				dot: color.dangerText,
+				bg: theme.color.dangerBg,
+				border: theme.color.dangerBorder,
+				text: theme.color.dangerText,
+				dot: theme.color.dangerText,
 				label: t("monitoring.offline"),
 				actionable: true,
 			};
 		}
-		if (connectionState === "reconnecting") {
+		if (connectionState === "reconnecting" || connectionState === "connecting") {
 			return {
-				bg: color.warnBg,
-				border: color.warnBorder,
-				text: color.warnText,
-				dot: color.warnText,
-				label: t("monitoring.reconnecting"),
+				bg: theme.color.warnBg,
+				border: theme.color.warnBorder,
+				text: theme.color.warnText,
+				dot: theme.color.warnText,
+				label:
+					connectionState === "connecting"
+						? t("monitoring.connecting")
+						: t("monitoring.reconnecting"),
 				actionable: false,
 			};
 		}
 		return {
-			bg: color.successBg,
-			border: color.successBorder,
-			text: color.successText,
-			dot: color.successText,
+			bg: theme.color.successBg,
+			border: theme.color.successBorder,
+			text: theme.color.successText,
+			dot: theme.color.successText,
 			label: t("monitoring.connected"),
 			actionable: false,
 		};
-	}, [connectionState, hasError, t]);
+	}, [connectionState, hasError, theme, t]);
 
 	const chip = (
 		<View
@@ -98,28 +116,56 @@ function StatusChip({ connectionState, hasError, onRetry }) {
 }
 
 export function MonitoringScreen() {
+	const theme = useTheme();
+	const styles = useThemedStyles(makeStyles);
+	const { t, formatNumber, formatDateTime } = useLanguage();
 	const {
 		temperature,
 		timestamp,
 		connectionState,
 		error: mqttError,
 	} = useMqttSensor();
-	const { t, formatNumber, formatDateTime } = useLanguage();
 	const [readings, setReadings] = useState([]);
 	const [latestThreshold, setLatestThreshold] = useState(null);
 	const [loading, setLoading] = useState(false);
 	const [refreshing, setRefreshing] = useState(false);
 	const [apiError, setApiError] = useState(null);
+	const [rangeKey, setRangeKey] = useState(DEFAULT_RANGE);
+	// ponytail: Date.now() is impure — "now" lives in state (ticked below) so the
+	// freshness memo stays pure and the label refreshes live.
 	const [now, setNow] = useState(null);
 	const reduceMotion = useReducedMotion();
+
+	const analytics = useLiveAnalytics({
+		temperature,
+		timestamp,
+		threshold: latestThreshold,
+	});
+	const backend = useBackendHealth();
+
+	// Haptic on the crossing itself. This is the only alert the app raises, and it
+	// needs no permission: it works the moment the reading crosses the limit.
+	const wasOverRef = useRef(false);
+	useEffect(() => {
+		const over = analytics.status.key === "over";
+		if (over && !wasOverRef.current) {
+			Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
+				() => {},
+			);
+		}
+		wasOverRef.current = over;
+	}, [analytics.status.key]);
 
 	const fetchReadings = useCallback(async () => {
 		setLoading(true);
 		setApiError(null);
 		try {
+			const range = RANGES.find((r) => r.key === rangeKey) ?? RANGES[0];
+			const since = range.ms ? new Date(Date.now() - range.ms).toISOString() : undefined;
+
 			const [history, thresholds] = await Promise.all([
-				Api.getSensorReadings(),
-				Api.getThresholds().catch(() => null),
+				Api.getSensorReadings({ since, limit: HISTORY_LIMIT }),
+				Api.getThresholds({ limit: 1 }).catch(() => null),
 			]);
 			setReadings(history ?? []);
 			const latest = Array.isArray(thresholds) ? thresholds[0]?.value : null;
@@ -129,7 +175,7 @@ export function MonitoringScreen() {
 		} finally {
 			setLoading(false);
 		}
-	}, [t]);
+	}, [rangeKey, t]);
 
 	useFocusEffect(
 		useCallback(() => {
@@ -147,30 +193,6 @@ export function MonitoringScreen() {
 		}
 	}, [fetchReadings]);
 
-	const proximity = useMemo(() => {
-		if (
-			typeof temperature !== "number" ||
-			typeof latestThreshold !== "number"
-		) {
-			return null;
-		}
-		let tone = "below threshold";
-		let statusWord = t("status.normal");
-		let statusColor = color.successText;
-		if (temperature >= latestThreshold) {
-			tone = "at or above threshold";
-			statusWord = t("status.over");
-			statusColor = color.dangerText;
-		} else if (temperature >= latestThreshold - 2) {
-			tone = "near threshold";
-			statusWord = t("status.near");
-			statusColor = color.warnText;
-		}
-		return { tone, statusWord, statusColor };
-	}, [temperature, latestThreshold, t]);
-
-	// ponytail: Date.now() is impure — "now" lives in state (ticked below)
-	// so the freshness memo stays pure and the label refreshes live.
 	useEffect(() => {
 		let cancelled = false;
 		const tick = () => {
@@ -184,6 +206,23 @@ export function MonitoringScreen() {
 			clearInterval(interval);
 		};
 	}, []);
+
+	// The orb's label comes from the same proximity state the panel uses, so the
+	// two can never disagree about how close the reading is.
+	const proximity = useMemo(() => {
+		if (
+			typeof temperature !== "number" ||
+			typeof latestThreshold !== "number"
+		) {
+			return null;
+		}
+		const words = {
+			safe: { statusWord: t("status.normal"), statusColor: theme.color.successText },
+			near: { statusWord: t("status.near"), statusColor: theme.color.warnText },
+			over: { statusWord: t("status.over"), statusColor: theme.color.dangerText },
+		};
+		return words[analytics.proximity.state] ?? null;
+	}, [temperature, latestThreshold, analytics.proximity.state, theme, t]);
 
 	const freshness = useMemo(() => {
 		if (now == null) return "";
@@ -228,7 +267,7 @@ export function MonitoringScreen() {
 					<RefreshControl
 						refreshing={refreshing}
 						onRefresh={onRefresh}
-						tintColor={color.primary}
+						tintColor={theme.color.primary}
 					/>
 				}
 			>
@@ -237,7 +276,7 @@ export function MonitoringScreen() {
 					entering={
 						reduceMotion
 							? FadeIn.duration(150)
-							: FadeInDown.duration(tokens.motion.entering)
+							: FadeInDown.duration(theme.motion.entering)
 					}
 				>
 					<View style={styles.cardTopRow}>
@@ -259,7 +298,7 @@ export function MonitoringScreen() {
 					>
 						<View style={styles.orbWrap}>
 							<TempOrb
-								tint={proximity ? proximity.statusColor : color.text}
+								tint={proximity ? proximity.statusColor : theme.color.text}
 								beatKey={beatKey}
 								dimmed={
 									connectionState !== "connected" &&
@@ -272,7 +311,7 @@ export function MonitoringScreen() {
 									<Text
 										style={[
 											styles.temperatureText,
-											{ color: proximity ? proximity.statusColor : color.text },
+											{ color: proximity ? proximity.statusColor : theme.color.text },
 										]}
 										selectable
 									>
@@ -282,7 +321,7 @@ export function MonitoringScreen() {
 										style={[
 											styles.unitText,
 											{
-												color: proximity ? proximity.statusColor : color.text2,
+												color: proximity ? proximity.statusColor : theme.color.text2,
 											},
 										]}
 									>
@@ -309,7 +348,7 @@ export function MonitoringScreen() {
 								<Ionicons
 									name="speedometer-outline"
 									size={15}
-									color={color.text3}
+									color={theme.color.text3}
 								/>
 								<Text style={styles.metaText}>
 									{t("monitoring.threshold", {
@@ -320,17 +359,51 @@ export function MonitoringScreen() {
 						) : null}
 						{timestamp ? (
 							<View style={styles.metaRow}>
-								<Ionicons name="time-outline" size={15} color={color.text3} />
+								<Ionicons name="time-outline" size={15} color={theme.color.text3} />
 								<Text style={styles.metaText}>
-									{t("monitoring.lastUpdate", {
-										time: formatDateTime(timestamp),
-									})}
+									{t("monitoring.lastUpdate", { time: formatDateTime(timestamp) })}
 								</Text>
 							</View>
 						) : null}
 						<View style={styles.metaRow}>
-							<Ionicons name="refresh-outline" size={15} color={color.text3} />
+							<Ionicons name="refresh-outline" size={15} color={theme.color.text3} />
 							<Text style={styles.metaText}>{freshness}</Text>
+						</View>
+						<View style={styles.metaRow}>
+							<Ionicons
+								name={
+									backend.state === "ok"
+										? "server-outline"
+										: "cloud-offline-outline"
+								}
+								size={15}
+								color={
+									backend.state === "ok"
+										? theme.color.text3
+										: backend.state === "degraded"
+											? theme.color.warnText
+											: theme.color.dangerText
+								}
+							/>
+							<Text
+								style={[
+									styles.metaText,
+									backend.state !== "ok" && {
+										color:
+											backend.state === "degraded"
+												? theme.color.warnText
+												: theme.color.dangerText,
+									},
+								]}
+							>
+								{backend.state === "ok"
+									? t("monitoring.dbOk", { ms: backend.latencyMs ?? "?" })
+									: backend.state === "degraded"
+										? t("monitoring.dbUnavailable")
+										: backend.state === "unreachable"
+											? t("monitoring.backendUnreachable")
+											: t("monitoring.backendChecking")}
+							</Text>
 						</View>
 					</View>
 
@@ -346,7 +419,7 @@ export function MonitoringScreen() {
 							<Ionicons
 								name="cloud-offline-outline"
 								size={18}
-								color={color.dangerText}
+								color={theme.color.dangerText}
 							/>
 							<View style={styles.errorBannerTextWrap}>
 								<Text style={styles.errorBannerTitle}>
@@ -370,6 +443,8 @@ export function MonitoringScreen() {
 					) : null}
 				</Animated.View>
 
+				<ThermalGuardCard analytics={analytics} />
+
 				{apiError && !loading ? (
 					<View
 						style={styles.errorBanner}
@@ -382,7 +457,7 @@ export function MonitoringScreen() {
 						<Ionicons
 							name="alert-circle-outline"
 							size={18}
-							color={color.dangerText}
+							color={theme.color.dangerText}
 						/>
 						<View style={styles.errorBannerTextWrap}>
 							<Text style={styles.errorBannerTitle}>
@@ -400,7 +475,7 @@ export function MonitoringScreen() {
 								pressed && styles.pressed,
 							]}
 						>
-							<Text style={styles.retryText}>{t("monitoring.refresh")}</Text>
+							<Text style={styles.retryText}>{t("monitoring.retry")}</Text>
 						</Pressable>
 					</View>
 				) : null}
@@ -421,6 +496,39 @@ export function MonitoringScreen() {
 							</View>
 						) : null}
 					</View>
+				</View>
+
+				<View style={styles.rangeRow} accessibilityRole="tablist">
+					{RANGES.map((range) => {
+						const active = range.key === rangeKey;
+						const rangeLabel = t(range.labelKey);
+						return (
+							<Pressable
+								key={range.key}
+								onPress={() => setRangeKey(range.key)}
+								accessibilityRole="tab"
+								accessibilityState={{ selected: active }}
+								accessibilityLabel={t("monitoring.rangeA11y", {
+									range: rangeLabel,
+								})}
+								hitSlop={6}
+								style={({ pressed }) => [
+									styles.rangeChip,
+									active && styles.rangeChipActive,
+									pressed && styles.pressed,
+								]}
+							>
+								<Text
+									style={[
+										styles.rangeChipText,
+										active && styles.rangeChipTextActive,
+									]}
+								>
+									{rangeLabel}
+								</Text>
+							</Pressable>
+						);
+					})}
 				</View>
 
 				<DataTable
@@ -451,7 +559,14 @@ export function MonitoringScreen() {
 					keyExtractor={(item) => item.id}
 					loading={loading && !refreshing}
 					emptyTitle={t("monitoring.emptyTitle")}
-					emptyMessage={t("monitoring.emptyMessage")}
+					emptyMessage={t(
+						"monitoring.emptyRangeMessage",
+						{
+							range: t(
+								(RANGES.find((r) => r.key === rangeKey) ?? RANGES[0]).labelKey,
+							).toLowerCase(),
+						},
+					)}
 					emptyActionLabel={t("monitoring.refresh")}
 					onEmptyAction={fetchReadings}
 				/>
@@ -460,7 +575,8 @@ export function MonitoringScreen() {
 	);
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, space, radius, shadow, type, hit }) =>
+	StyleSheet.create({
 	safe: {
 		flex: 1,
 		backgroundColor: color.bg,
@@ -583,7 +699,7 @@ const styles = StyleSheet.create({
 		gap: space.sm,
 	},
 	sectionTitle: {
-		fontSize: tokens.type.section,
+		fontSize: type.section,
 		fontWeight: "700",
 		color: color.text,
 	},
@@ -599,6 +715,33 @@ const styles = StyleSheet.create({
 		fontWeight: "600",
 		color: color.text2,
 		fontVariant: ["tabular-nums"],
+	},
+	rangeRow: {
+		flexDirection: "row",
+		gap: space.sm,
+		flexWrap: "wrap",
+	},
+	rangeChip: {
+		minHeight: 34,
+		justifyContent: "center",
+		paddingHorizontal: space.md,
+		borderRadius: radius.chip,
+		borderCurve: "continuous",
+		borderWidth: 1,
+		borderColor: color.border,
+		backgroundColor: color.surface,
+	},
+	rangeChipActive: {
+		backgroundColor: color.primary,
+		borderColor: color.primary,
+	},
+	rangeChipText: {
+		fontSize: 13,
+		fontWeight: "600",
+		color: color.text2,
+	},
+	rangeChipTextActive: {
+		color: color.onPrimary,
 	},
 	errorBanner: {
 		flexDirection: "row",
@@ -625,7 +768,7 @@ const styles = StyleSheet.create({
 		color: color.dangerText,
 	},
 	retryButton: {
-		minHeight: tokens.hit,
+		minHeight: hit,
 		justifyContent: "center",
 		paddingHorizontal: space.md,
 	},
@@ -639,3 +782,4 @@ const styles = StyleSheet.create({
 		transform: [{ scale: 0.98 }],
 	},
 });
+

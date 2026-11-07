@@ -16,11 +16,23 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { Api } from "../services/api.js";
 import { DataTable } from "../components/DataTable.js";
 import { useLanguage } from "../i18n/LanguageProvider.js";
-import { tokens } from "../theme/tokens.js";
+import { useTheme, useThemeContext, useThemedStyles } from "../theme/ThemeProvider.js";
+import { PREFERENCES } from "../theme/scheme.js";
 
-const { color, space, radius, shadow } = tokens;
 const MIN_THRESHOLD = -50;
 const MAX_THRESHOLD = 100;
+
+const PREFERENCE_ICON = {
+  system: "phone-portrait-outline",
+  light: "sunny-outline",
+  dark: "moon-outline",
+};
+
+const PREFERENCE_LABEL_KEY = {
+  system: "control.prefSystem",
+  light: "control.prefLight",
+  dark: "control.prefDark",
+};
 
 function parseThreshold(text) {
   const normalized = text.trim().replace(",", ".");
@@ -30,7 +42,10 @@ function parseThreshold(text) {
 }
 
 export function ControlScreen() {
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { t, formatNumber, formatDateTime } = useLanguage();
+  const { preference, scheme, setPreference } = useThemeContext();
   const [thresholdText, setThresholdText] = useState("30");
   const [note, setNote] = useState("");
   const [touched, setTouched] = useState({ threshold: false });
@@ -88,7 +103,7 @@ export function ControlScreen() {
 
   const handleSubmit = useCallback(async () => {
     Keyboard.dismiss();
-    setTouched((prev) => ({ ...prev, threshold: true }));
+    setTouched((t) => ({ ...t, threshold: true }));
     if (thresholdError !== null) {
       thresholdRef.current?.focus();
       return;
@@ -126,14 +141,8 @@ export function ControlScreen() {
             <View style={styles.titleRow}>
               <Text style={styles.title}>{t("control.title")}</Text>
               {typeof latestThreshold === "number" ? (
-                <View
-                  style={styles.currentPill}
-                  accessible
-                  accessibilityLabel={t("control.currentA11y", {
-                    value: formatNumber(latestThreshold),
-                  })}
-                >
-                  <Ionicons name="speedometer-outline" size={16} color={color.text2} />
+                <View style={styles.currentPill} accessible accessibilityLabel={t("control.currentA11y", { value: formatNumber(latestThreshold) })}>
+                  <Ionicons name="speedometer-outline" size={16} color={theme.color.text2} />
                   <Text style={styles.currentText}>
                     {t("control.current", { value: formatNumber(latestThreshold) })}
                   </Text>
@@ -148,7 +157,7 @@ export function ControlScreen() {
                 accessibilityLiveRegion="polite"
                 accessibilityLabel={t("control.saved")}
               >
-                <Ionicons name="checkmark-circle" size={18} color={color.successText} />
+                <Ionicons name="checkmark-circle" size={18} color={theme.color.successText} />
                 <Text style={styles.successText}>{t("control.saved")}</Text>
               </View>
             ) : null}
@@ -203,7 +212,7 @@ export function ControlScreen() {
                 numberOfLines={3}
                 maxLength={140}
                 placeholder={t("control.notePlaceholder")}
-                placeholderTextColor={color.text3}
+                placeholderTextColor={theme.color.text3}
                 returnKeyType="done"
                 accessibilityLabel={t("control.noteA11y")}
                 accessibilityHint={t("control.noteHint")}
@@ -218,7 +227,7 @@ export function ControlScreen() {
                 accessibilityLiveRegion="polite"
                 accessibilityLabel={t("control.errorA11y", { message: error })}
               >
-                <Ionicons name="alert-circle-outline" size={18} color={color.dangerText} />
+                <Ionicons name="alert-circle-outline" size={18} color={theme.color.dangerText} />
                 <Text style={styles.errorBannerText}>{error}</Text>
               </View>
             ) : null}
@@ -237,7 +246,7 @@ export function ControlScreen() {
               accessibilityHint={t("control.saveHint")}
             >
               {submitting ? (
-                <ActivityIndicator color={color.onPrimary} />
+                <ActivityIndicator color={theme.color.onPrimary} />
               ) : (
                 <Text style={styles.buttonText}>{t("control.save")}</Text>
               )}
@@ -275,13 +284,133 @@ export function ControlScreen() {
             emptyTitle={t("control.emptyTitle")}
             emptyMessage={t("control.emptyMessage")}
           />
+
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{t("control.appearanceTitle")}</Text>
+          </View>
+
+          <View style={styles.appearanceCard}>
+            <Text style={styles.appearanceHint}>
+              {preference === "system"
+                ? t("control.followingSystem", {
+                    mode: t("control.modeSystem"),
+                  })
+                : t("control.pinned", {
+                    mode: t(PREFERENCE_LABEL_KEY[preference] ?? "control.prefSystem"),
+                  })}
+            </Text>
+
+            <View style={styles.preferenceRow} accessibilityRole="radiogroup">
+              {PREFERENCES.map((key) => {
+                const active = preference === key;
+                const prefName = t(
+                  key === "system"
+                    ? "control.prefSystem"
+                    : key === "light"
+                      ? "control.prefLight"
+                      : "control.prefDark",
+                );
+                return (
+                  <Pressable
+                    key={key}
+                    onPress={() => setPreference(key)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={t("control.prefA11y", { name: prefName })}
+                    accessibilityHint={
+                      key === "system"
+                        ? t("control.prefSystemHint")
+                        : t("control.prefExplicitHint", {
+                            name: prefName.toLowerCase(),
+                          })
+                    }
+                    hitSlop={6}
+                    style={({ pressed }) => [
+                      styles.preferenceOption,
+                      active && styles.preferenceOptionActive,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Ionicons
+                      name={PREFERENCE_ICON[key]}
+                      size={16}
+                      color={active ? theme.color.onPrimary : theme.color.text2}
+                    />
+                    <Text
+                      style={[
+                        styles.preferenceLabel,
+                        active && styles.preferenceLabelActive,
+                      ]}
+                    >
+                      {prefName}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text style={styles.appearanceFootnote}>
+              {t("control.appearanceFootnote", {
+                mode: scheme === "dark" ? t("control.modeDark") : t("control.modeLight"),
+              })}
+            </Text>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, space, radius, shadow, type, hit }) =>
+  StyleSheet.create({
+  appearanceCard: {
+    backgroundColor: color.surface,
+    borderWidth: 1,
+    borderColor: color.border,
+    borderRadius: radius.card,
+    borderCurve: "continuous",
+    padding: space.lg,
+    gap: space.md,
+    boxShadow: shadow.card,
+  },
+  appearanceHint: {
+    fontSize: 13,
+    color: color.text2,
+  },
+  preferenceRow: {
+    flexDirection: "row",
+    gap: space.sm,
+  },
+  preferenceOption: {
+    flex: 1,
+    minHeight: hit,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderColor: color.border,
+    borderRadius: radius.input,
+    borderCurve: "continuous",
+    backgroundColor: color.surface2,
+    paddingVertical: 10,
+  },
+  preferenceOptionActive: {
+    backgroundColor: color.primary,
+    borderColor: color.primary,
+  },
+  preferenceLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: color.text2,
+  },
+  preferenceLabelActive: {
+    color: color.onPrimary,
+  },
+  appearanceFootnote: {
+    fontSize: 12,
+    color: color.text3,
+  },
   safe: {
     flex: 1,
     backgroundColor: color.bg,
@@ -306,7 +435,7 @@ const styles = StyleSheet.create({
     boxShadow: shadow.card,
   },
   title: {
-    fontSize: tokens.type.title,
+    fontSize: type.title,
     fontWeight: "700",
     color: color.text,
     letterSpacing: -0.5,
@@ -447,8 +576,9 @@ const styles = StyleSheet.create({
     marginBottom: -space.sm,
   },
   sectionTitle: {
-    fontSize: tokens.type.section,
+    fontSize: type.section,
     fontWeight: "700",
     color: color.text,
   },
 });
+

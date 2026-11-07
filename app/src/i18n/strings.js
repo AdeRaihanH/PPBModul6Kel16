@@ -1,5 +1,6 @@
 // All user-facing copy lives here. Add a key to both `en` and `id` — a missing
-// key falls back to English, then to the raw key so nothing renders blank.
+// key falls back to the default language (id), then to the raw key so nothing
+// renders blank.
 
 export const LANGUAGES = ["id", "en"];
 export const DEFAULT_LANGUAGE = "id";
@@ -14,6 +15,13 @@ const en = {
   tabs: {
     monitoring: "Monitoring",
     control: "Control",
+  },
+  theme: {
+    label: "Dark mode",
+    on: "on",
+    off: "off",
+    switchToLight: "Switches to light mode",
+    switchToDark: "Switches to dark mode",
   },
   language: {
     label: "Language",
@@ -33,6 +41,7 @@ const en = {
     eyebrow: "Live temperature",
     connected: "Connected",
     reconnecting: "Reconnecting…",
+    connecting: "Connecting…",
     offline: "Offline",
     chipA11y: "Sensor feed {status}",
     retryFeed: "Retry sensor feed",
@@ -57,9 +66,20 @@ const en = {
     columnLimit: "Limit °C",
     emptyTitle: "No readings yet",
     emptyMessage: "Triggered readings appear here. Pull to refresh.",
+    emptyRangeMessage:
+      "No alarms in the last {range}. Pull to refresh, or widen the range.",
     refresh: "Refresh",
     retry: "Retry",
     errorDefault: "Couldn't load history.",
+    range15m: "15 min",
+    range1h: "1 hour",
+    range6h: "6 hours",
+    rangeAll: "All",
+    rangeA11y: "Show alarms from the last {range}",
+    dbOk: "Database ok · {ms} ms",
+    dbUnavailable: "Database unavailable",
+    backendUnreachable: "Backend unreachable",
+    backendChecking: "Checking backend…",
   },
   status: {
     normal: "Normal",
@@ -92,6 +112,20 @@ const en = {
     columnNote: "Note",
     emptyTitle: "No thresholds yet",
     emptyMessage: "Save your first threshold above.",
+    appearanceTitle: "Appearance",
+    followingSystem: "Following your device setting (currently {mode}).",
+    pinned: "Pinned to {mode} mode.",
+    prefSystem: "System",
+    prefLight: "Light",
+    prefDark: "Dark",
+    prefA11y: "{name} appearance",
+    prefSystemHint: "Follows the device light or dark setting",
+    prefExplicitHint: "Always use {name} mode",
+    appearanceFootnote:
+      "Active: {mode} · you can also tap the switch in the header from any screen.",
+    modeDark: "Dark",
+    modeLight: "Light",
+    modeSystem: "system",
   },
 };
 
@@ -102,6 +136,13 @@ const id = {
   tabs: {
     monitoring: "Pemantauan",
     control: "Kontrol",
+  },
+  theme: {
+    label: "Mode gelap",
+    on: "nyala",
+    off: "mati",
+    switchToLight: "Beralih ke mode terang",
+    switchToDark: "Beralih ke mode gelap",
   },
   language: {
     label: "Bahasa",
@@ -121,6 +162,7 @@ const id = {
     eyebrow: "Suhu terkini",
     connected: "Terhubung",
     reconnecting: "Menyambung ulang…",
+    connecting: "Menyambung…",
     offline: "Terputus",
     chipA11y: "Umpan sensor {status}",
     retryFeed: "Muat ulang umpan sensor",
@@ -146,9 +188,20 @@ const id = {
     emptyTitle: "Belum ada pembacaan",
     emptyMessage:
       "Pembacaan yang memicu alarm akan muncul di sini. Tarik untuk memuat ulang.",
+    emptyRangeMessage:
+      "Tidak ada alarm dalam {range} terakhir. Tarik untuk memuat ulang, atau perluas rentang.",
     refresh: "Muat ulang",
     retry: "Coba lagi",
     errorDefault: "Gagal memuat riwayat.",
+    range15m: "15 mnt",
+    range1h: "1 jam",
+    range6h: "6 jam",
+    rangeAll: "Semua",
+    rangeA11y: "Tampilkan alarm dari {range} terakhir",
+    dbOk: "Database ok · {ms} md",
+    dbUnavailable: "Database tidak tersedia",
+    backendUnreachable: "Backend tidak terjangkau",
+    backendChecking: "Memeriksa backend…",
   },
   status: {
     normal: "Normal",
@@ -181,6 +234,20 @@ const id = {
     columnNote: "Catatan",
     emptyTitle: "Belum ada ambang batas",
     emptyMessage: "Simpan ambang batas pertama Anda di atas.",
+    appearanceTitle: "Tampilan",
+    followingSystem: "Mengikuti setelan perangkat Anda (saat ini {mode}).",
+    pinned: "Terpaku ke mode {mode}.",
+    prefSystem: "Sistem",
+    prefLight: "Terang",
+    prefDark: "Gelap",
+    prefA11y: "Tampilan {name}",
+    prefSystemHint: "Mengikuti setelan terang atau gelap perangkat",
+    prefExplicitHint: "Selalu gunakan mode {name}",
+    appearanceFootnote:
+      "Aktif: {mode} · Anda juga bisa menekan sakelar di header dari layar mana pun.",
+    modeDark: "Gelap",
+    modeLight: "Terang",
+    modeSystem: "sistem",
   },
 };
 
