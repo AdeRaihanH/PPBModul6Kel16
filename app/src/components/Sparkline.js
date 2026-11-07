@@ -25,6 +25,17 @@ const PAD_X = 8;
 const PAD_TOP = 12;
 const PAD_BOTTOM = 14;
 
+// Skia 2.x made SkPath immutable: moveTo/lineTo/close live on SkPathBuilder and
+// the finished path comes from detach(). Older Skia had a mutable SkPath, so pick
+// whichever the installed version provides instead of assuming one.
+function startPath() {
+	return Skia.PathBuilder?.Make ? Skia.PathBuilder.Make() : Skia.Path.Make();
+}
+
+function finishPath(builder) {
+	return typeof builder.detach === "function" ? builder.detach() : builder;
+}
+
 /**
  * Live temperature trace: rolling samples, dashed threshold, and a dotted
  * projection to the predicted crossing point.
@@ -73,18 +84,28 @@ export function Sparkline({
 		const toX = (t) => PAD_X + ((t - t0) / domain) * plotW;
 		const toY = (v) => PAD_TOP + (1 - (v - lo) / (hi - lo)) * plotH;
 
-		const line = Skia.Path.Make();
+		// Two independent builders: the area needs the outline plus two closing
+		// edges, and the immutable SkPath cannot be mutated after detach().
+		const lineBuilder = startPath();
+		const areaBuilder = startPath();
 		samples.forEach((sample, index) => {
 			const x = toX(sample.t);
 			const y = toY(sample.v);
-			if (index === 0) line.moveTo(x, y);
-			else line.lineTo(x, y);
+			if (index === 0) {
+				lineBuilder.moveTo(x, y);
+				areaBuilder.moveTo(x, y);
+			} else {
+				lineBuilder.lineTo(x, y);
+				areaBuilder.lineTo(x, y);
+			}
 		});
 
-		const area = line.copy();
-		area.lineTo(toX(tN), PAD_TOP + plotH);
-		area.lineTo(toX(t0), PAD_TOP + plotH);
-		area.close();
+		areaBuilder.lineTo(toX(tN), PAD_TOP + plotH);
+		areaBuilder.lineTo(toX(t0), PAD_TOP + plotH);
+		areaBuilder.close();
+
+		const line = finishPath(lineBuilder);
+		const area = finishPath(areaBuilder);
 
 		const last = samples[samples.length - 1];
 		const lastX = toX(last.t);
@@ -92,10 +113,10 @@ export function Sparkline({
 
 		let projected = null;
 		if (etaMs > 0 && typeof threshold === "number") {
-			const path = Skia.Path.Make();
-			path.moveTo(lastX, lastY);
-			path.lineTo(toX(tN + etaMs), toY(threshold));
-			projected = path;
+			const builder = startPath();
+			builder.moveTo(lastX, lastY);
+			builder.lineTo(toX(tN + etaMs), toY(threshold));
+			projected = finishPath(builder);
 		}
 
 		return {
