@@ -36,6 +36,9 @@ const en = {
     loading: "Loading data",
     noData: "No data yet",
     noDataMessage: "Items will appear here.",
+    pageOf: "Page {page} of {total}",
+    prevPage: "Previous page",
+    nextPage: "Next page",
   },
   monitoring: {
     eyebrow: "Live temperature",
@@ -157,6 +160,9 @@ const id = {
     loading: "Memuat data",
     noData: "Belum ada data",
     noDataMessage: "Data akan muncul di sini.",
+    pageOf: "Halaman {page} dari {total}",
+    prevPage: "Halaman sebelumnya",
+    nextPage: "Halaman berikutnya",
   },
   monitoring: {
     eyebrow: "Suhu terkini",

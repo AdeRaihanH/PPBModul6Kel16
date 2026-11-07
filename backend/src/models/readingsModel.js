@@ -22,44 +22,80 @@ function assertValidTemperature(temperature) {
 
 const COLUMNS = "id, temperature, threshold_value, client_id, recorded_at";
 
-export const DEFAULT_LIMIT = 100;
-export const MAX_LIMIT = 500;
-
 /**
- * Clamps a client-supplied time range.
+ * Clamps a client-supplied time filter.
  *
- * A range filter is useless without an upper bound on rows, and an unbounded
- * query would eventually drag the whole table onto a phone. Both ends are clamped
- * here rather than trusted from the query string.
+ * A malformed `since` from the query string must not break the screen: anything
+ * unparseable falls back to null (no lower bound) rather than erroring.
  */
-export function normalizeRange({ since, limit } = {}) {
-  const parsedLimit = Number(limit);
-  const safeLimit =
-    Number.isFinite(parsedLimit) && parsedLimit > 0
-      ? Math.min(Math.floor(parsedLimit), MAX_LIMIT)
-      : DEFAULT_LIMIT;
-
-  let safeSince = null;
+export function normalizeSince({ since } = {}) {
   if (typeof since === "string" && since.trim()) {
     const time = Date.parse(since);
-    if (!Number.isNaN(time)) safeSince = new Date(time).toISOString();
+    if (!Number.isNaN(time)) return new Date(time).toISOString();
   }
+  return null;
+}
 
-  return { since: safeSince, limit: safeLimit };
+export const DEFAULT_PAGE_SIZE = 10;
+export const MAX_PAGE_SIZE = 100;
+
+/**
+ * Clamps a client-supplied page request.
+ *
+ * Same philosophy as the range filter: a page number from the query string is
+ * untrusted input, so it is clamped here rather than trusted. Page 0, negatives,
+ * and non-numbers all fall back to page 1; oversized page sizes are capped so a
+ * single request can never drag the whole table onto a phone.
+ */
+export function normalizePagination({ page, pageSize } = {}) {
+  const parsedSize = Number(pageSize);
+  const safePageSize =
+    Number.isFinite(parsedSize) && parsedSize > 0
+      ? Math.min(Math.floor(parsedSize), MAX_PAGE_SIZE)
+      : DEFAULT_PAGE_SIZE;
+
+  const parsedPage = Number(page);
+  const safePage =
+    Number.isFinite(parsedPage) && parsedPage > 0 ? Math.floor(parsedPage) : 1;
+
+  return {
+    page: safePage,
+    pageSize: safePageSize,
+    offset: (safePage - 1) * safePageSize,
+  };
 }
 
 export const ReadingsModel = {
   async list(options = {}) {
-    const { since, limit } = normalizeRange(options);
+    const since = normalizeSince(options);
+    const { page, pageSize, offset } = normalizePagination(options);
+
+    // The count walks the same filter as the page query, so totalPages can never
+    // disagree with what the page query would have returned.
+    const { rows: countRows } = await pool.query(
+      `SELECT COUNT(*)::int AS total
+       FROM public.sensor_readings
+       WHERE ($1::timestamptz IS NULL OR recorded_at >= $1)`,
+      [since]
+    );
+    const total = countRows[0]?.total ?? 0;
+
     const { rows } = await pool.query(
       `SELECT ${COLUMNS}
        FROM public.sensor_readings
        WHERE ($1::timestamptz IS NULL OR recorded_at >= $1)
        ORDER BY recorded_at DESC
-       LIMIT $2`,
-      [since, limit]
+       LIMIT $2 OFFSET $3`,
+      [since, pageSize, offset]
     );
-    return rows.map(normalize);
+
+    return {
+      data: rows.map(normalize),
+      page,
+      pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    };
   },
 
   async latest() {

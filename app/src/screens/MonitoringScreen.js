@@ -34,7 +34,7 @@ const RANGES = [
 	{ key: "all", labelKey: "monitoring.rangeAll", ms: null },
 ];
 const DEFAULT_RANGE = "1h";
-const HISTORY_LIMIT = 200;
+const HISTORY_PAGE_SIZE = 10;
 
 function StatusChip({ connectionState, hasError, onRetry }) {
 	const theme = useTheme();
@@ -131,6 +131,12 @@ export function MonitoringScreen() {
 	const [refreshing, setRefreshing] = useState(false);
 	const [apiError, setApiError] = useState(null);
 	const [rangeKey, setRangeKey] = useState(DEFAULT_RANGE);
+	const [page, setPage] = useState(1);
+	const [totalPages, setTotalPages] = useState(1);
+	const [totalReadings, setTotalReadings] = useState(0);
+	// ponytail: the page lives in a ref too, so fetchReadings stays referentially
+	// stable — a page change must not re-trigger useFocusEffect and double-fetch.
+	const pageRef = useRef(1);
 	// ponytail: Date.now() is impure — "now" lives in state (ticked below) so the
 	// freshness memo stays pure and the label refreshes live.
 	const [now, setNow] = useState(null);
@@ -156,26 +162,58 @@ export function MonitoringScreen() {
 		wasOverRef.current = over;
 	}, [analytics.status.key]);
 
-	const fetchReadings = useCallback(async () => {
-		setLoading(true);
-		setApiError(null);
-		try {
-			const range = RANGES.find((r) => r.key === rangeKey) ?? RANGES[0];
-			const since = range.ms ? new Date(Date.now() - range.ms).toISOString() : undefined;
+	const fetchReadings = useCallback(
+		async (targetPage) => {
+			let target = targetPage ?? pageRef.current;
+			setLoading(true);
+			setApiError(null);
+			try {
+				const range = RANGES.find((r) => r.key === rangeKey) ?? RANGES[0];
+				const since = range.ms
+					? new Date(Date.now() - range.ms).toISOString()
+					: undefined;
 
-			const [history, thresholds] = await Promise.all([
-				Api.getSensorReadings({ since, limit: HISTORY_LIMIT }),
-				Api.getThresholds({ limit: 1 }).catch(() => null),
-			]);
-			setReadings(history ?? []);
-			const latest = Array.isArray(thresholds) ? thresholds[0]?.value : null;
-			setLatestThreshold(typeof latest === "number" ? latest : null);
-		} catch (err) {
-			setApiError(err.message || t("monitoring.errorDefault"));
-		} finally {
-			setLoading(false);
-		}
-	}, [rangeKey, t]);
+				// The table may have shrunk since the page was fetched (readings
+				// expired out of the range, say) — clamp back into range instead of
+				// showing a page that can never have data.
+				let history;
+				for (;;) {
+					history = await Api.getSensorReadings({
+						since,
+						page: target,
+						pageSize: HISTORY_PAGE_SIZE,
+					});
+					const lastPage = history?.totalPages ?? 1;
+					if (target <= lastPage) break;
+					target = lastPage;
+					pageRef.current = target;
+					setPage(target);
+				}
+
+				const thresholds = await Api.getLatestThreshold().catch(() => null);
+				setReadings(history?.data ?? []);
+				setTotalPages(history?.totalPages ?? 1);
+				setTotalReadings(history?.total ?? 0);
+				const latest =
+					typeof thresholds?.value === "number" ? thresholds.value : null;
+				setLatestThreshold(latest);
+			} catch (err) {
+				setApiError(err.message || t("monitoring.errorDefault"));
+			} finally {
+				setLoading(false);
+			}
+		},
+		[rangeKey, t],
+	);
+
+	const handlePageChange = useCallback(
+		(nextPage) => {
+			pageRef.current = nextPage;
+			setPage(nextPage);
+			fetchReadings(nextPage);
+		},
+		[fetchReadings],
+	);
 
 	useFocusEffect(
 		useCallback(() => {
@@ -242,13 +280,13 @@ export function MonitoringScreen() {
 					: t("monitoring.minutesAgo", { m: Math.floor(s / 60) });
 		return t("monitoring.updated", {
 			rel,
-			count: readings.length,
+			count: totalReadings,
 			unit:
-				readings.length === 1
+				totalReadings === 1
 					? t("monitoring.readingOne")
 					: t("monitoring.readingOther"),
 		});
-	}, [readings, now, t]);
+	}, [readings, totalReadings, now, t]);
 
 	const tempLabel =
 		typeof temperature === "number" ? formatNumber(temperature) : "--";
@@ -485,11 +523,11 @@ export function MonitoringScreen() {
 						<Text style={styles.sectionTitle}>
 							{t("monitoring.historyTitle")}
 						</Text>
-						{Array.isArray(readings) && readings.length > 0 ? (
+						{totalReadings > 0 ? (
 							<View style={styles.countPill}>
 								<Text style={styles.countText}>
-									{readings.length}{" "}
-									{readings.length === 1
+									{totalReadings}{" "}
+									{totalReadings === 1
 										? t("monitoring.readingOne")
 										: t("monitoring.readingOther")}
 								</Text>
@@ -505,7 +543,12 @@ export function MonitoringScreen() {
 						return (
 							<Pressable
 								key={range.key}
-								onPress={() => setRangeKey(range.key)}
+								onPress={() => {
+									// A new range restarts the list — page 1, always.
+									pageRef.current = 1;
+									setPage(1);
+									setRangeKey(range.key);
+								}}
 								accessibilityRole="tab"
 								accessibilityState={{ selected: active }}
 								accessibilityLabel={t("monitoring.rangeA11y", {
@@ -558,6 +601,9 @@ export function MonitoringScreen() {
 					data={readings}
 					keyExtractor={(item) => item.id}
 					loading={loading && !refreshing}
+					page={page}
+					totalPages={totalPages}
+					onPageChange={handlePageChange}
 					emptyTitle={t("monitoring.emptyTitle")}
 					emptyMessage={t(
 						"monitoring.emptyRangeMessage",

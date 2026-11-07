@@ -1,9 +1,14 @@
 import { ReadingsModel } from "../models/readingsModel.js";
 
-// Accepts ?since=<ISO date>&limit=<n>. Invalid values fall back to defaults in
-// the model rather than erroring: a malformed filter should not break the screen.
+// Accepts ?since=<ISO date>&page=<n>&pageSize=<n>. Invalid values fall back to
+// defaults in the model rather than erroring: a malformed filter should not
+// break the screen.
 function rangeFrom(req) {
-  return { since: req.query.since, limit: req.query.limit };
+  return {
+    since: req.query.since,
+    page: req.query.page,
+    pageSize: req.query.pageSize,
+  };
 }
 
 export const ReadingsController = {

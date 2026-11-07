@@ -43,12 +43,13 @@ async function request(path, options = {}) {
   }
 }
 
-// Builds ?since=…&limit=… only from values that were actually provided, so an
-// unfiltered request keeps the exact URL it had before.
-function queryString({ since, limit } = {}) {
+// Builds ?since=…&page=…&pageSize=… only from values that were actually
+// provided, so an unfiltered request keeps the exact URL it had before.
+function queryString({ since, page, pageSize } = {}) {
   const params = [];
   if (since) params.push(`since=${encodeURIComponent(since)}`);
-  if (limit) params.push(`limit=${encodeURIComponent(limit)}`);
+  if (page) params.push(`page=${encodeURIComponent(page)}`);
+  if (pageSize) params.push(`pageSize=${encodeURIComponent(pageSize)}`);
   return params.length ? `?${params.join("&")}` : "";
 }
 
@@ -58,6 +59,11 @@ export const Api = {
   },
   getThresholds(options = {}) {
     return request(`/api/thresholds${queryString(options)}`);
+  },
+  // Dedicated endpoint for the "current threshold" pill — one row instead of
+  // relying on the first row of a paginated history page.
+  getLatestThreshold() {
+    return request("/api/thresholds/latest");
   },
   createThreshold(payload) {
     return request("/api/thresholds", {

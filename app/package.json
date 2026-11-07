@@ -35,7 +35,8 @@
     "web": "expo start --web",
     "postinstall": "node scripts/patch-expo-cli.js",
     "patch:expo-cli": "node scripts/patch-expo-cli.js",
-    "check:scope": "node scripts/check-scope.js"
+    "check:scope": "node scripts/check-scope.js",
+    "lint": "expo lint"
   },
   "private": true
 }

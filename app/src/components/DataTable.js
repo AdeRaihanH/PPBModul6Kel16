@@ -84,6 +84,9 @@ export function DataTable({
 	onEmptyAction,
 	loading = false,
 	loadingRows = 3,
+	page = 1,
+	totalPages = 1,
+	onPageChange,
 }) {
 	const { t } = useLanguage();
 	const theme = useTheme();
@@ -151,6 +154,51 @@ export function DataTable({
 					) : null}
 				</View>
 			)}
+			{onPageChange && !loading && totalPages > 1 ? (
+				<View style={styles.paginationRow}>
+					<Pressable
+						disabled={page <= 1}
+						onPress={() => onPageChange(page - 1)}
+						accessibilityRole="button"
+						accessibilityLabel={t("dataTable.prevPage")}
+						accessibilityState={{ disabled: page <= 1 }}
+						hitSlop={8}
+						style={({ pressed }) => [
+							styles.pageButton,
+							page <= 1 && styles.pageButtonDisabled,
+							pressed && page > 1 && styles.pressed,
+						]}
+					>
+						<Ionicons
+							name="chevron-back"
+							size={16}
+							color={page <= 1 ? theme.color.text3 : theme.color.text}
+						/>
+					</Pressable>
+					<Text style={styles.pageText}>
+						{t("dataTable.pageOf", { page, total: totalPages })}
+					</Text>
+					<Pressable
+						disabled={page >= totalPages}
+						onPress={() => onPageChange(page + 1)}
+						accessibilityRole="button"
+						accessibilityLabel={t("dataTable.nextPage")}
+						accessibilityState={{ disabled: page >= totalPages }}
+						hitSlop={8}
+						style={({ pressed }) => [
+							styles.pageButton,
+							page >= totalPages && styles.pageButtonDisabled,
+							pressed && page < totalPages && styles.pressed,
+						]}
+					>
+						<Ionicons
+							name="chevron-forward"
+							size={16}
+							color={page >= totalPages ? theme.color.text3 : theme.color.text}
+						/>
+					</Pressable>
+				</View>
+			) : null}
 		</View>
 	);
 }
@@ -257,5 +305,35 @@ const makeStyles = ({ color, space, radius, shadow, hit }) =>
 			color: color.onPrimary,
 			fontWeight: "600",
 			fontSize: 14,
+		},
+		paginationRow: {
+			flexDirection: "row",
+			alignItems: "center",
+			justifyContent: "space-between",
+			borderTopWidth: 1,
+			borderTopColor: color.border,
+			paddingVertical: 8,
+			paddingHorizontal: space.md,
+		},
+		pageButton: {
+			minHeight: hit,
+			minWidth: hit,
+			alignItems: "center",
+			justifyContent: "center",
+			borderWidth: 1,
+			borderColor: color.border,
+			borderRadius: radius.input,
+			borderCurve: "continuous",
+			backgroundColor: color.surface,
+			paddingHorizontal: 10,
+		},
+		pageButtonDisabled: {
+			opacity: 0.4,
+		},
+		pageText: {
+			fontSize: 13,
+			fontWeight: "600",
+			color: color.text2,
+			fontVariant: ["tabular-nums"],
 		},
 	});

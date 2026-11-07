@@ -21,6 +21,7 @@ import { PREFERENCES } from "../theme/scheme.js";
 
 const MIN_THRESHOLD = -50;
 const MAX_THRESHOLD = 100;
+const HISTORY_PAGE_SIZE = 10;
 
 const PREFERENCE_ICON = {
   system: "phone-portrait-outline",
@@ -51,9 +52,15 @@ export function ControlScreen() {
   const [touched, setTouched] = useState({ threshold: false });
   const [submitting, setSubmitting] = useState(false);
   const [history, setHistory] = useState([]);
+  const [latestThreshold, setLatestThreshold] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  // ponytail: the page lives in a ref too, so fetchHistory stays referentially
+  // stable — a page change must not re-trigger useFocusEffect and double-fetch.
+  const pageRef = useRef(1);
 
   const thresholdRef = useRef(null);
   const noteRef = useRef(null);
@@ -65,26 +72,55 @@ export function ControlScreen() {
     };
   }, []);
 
-  const fetchHistory = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await Api.getThresholds();
-      setHistory(data ?? []);
-    } catch (err) {
-      setError(err.message || t("control.historyErrorDefault"));
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
+  const fetchHistory = useCallback(
+    async (targetPage) => {
+      let target = targetPage ?? pageRef.current;
+      setLoading(true);
+      setError(null);
+      try {
+        // The table may have shrunk since the page was fetched (a row deleted,
+        // say) — clamp back into range instead of showing a page that can never
+        // have data.
+        let payload;
+        for (;;) {
+          payload = await Api.getThresholds({
+            page: target,
+            pageSize: HISTORY_PAGE_SIZE,
+          });
+          const lastPage = payload?.totalPages ?? 1;
+          if (target <= lastPage) break;
+          target = lastPage;
+          pageRef.current = target;
+          setPage(target);
+        }
+
+        const latest = await Api.getLatestThreshold();
+        setHistory(payload?.data ?? []);
+        setTotalPages(payload?.totalPages ?? 1);
+        setLatestThreshold(typeof latest?.value === "number" ? latest.value : null);
+      } catch (err) {
+        setError(err.message || t("control.historyErrorDefault"));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [t],
+  );
+
+  const handlePageChange = useCallback(
+    (nextPage) => {
+      pageRef.current = nextPage;
+      setPage(nextPage);
+      fetchHistory(nextPage);
+    },
+    [fetchHistory],
+  );
 
   useFocusEffect(
     useCallback(() => {
       fetchHistory();
     }, [fetchHistory])
   );
-
-  const latestThreshold = useMemo(() => history?.[0]?.value ?? null, [history]);
 
   const parsed = useMemo(() => parseThreshold(thresholdText), [thresholdText]);
   const thresholdError = useMemo(() => {
@@ -116,7 +152,11 @@ export function ControlScreen() {
       setShowSuccess(true);
       if (successTimer.current) clearTimeout(successTimer.current);
       successTimer.current = setTimeout(() => setShowSuccess(false), 3000);
-      await fetchHistory();
+      // A new row lands at the top of the list — jump back to page 1 so it is
+      // visible right away.
+      pageRef.current = 1;
+      setPage(1);
+      await fetchHistory(1);
     } catch (err) {
       setError(err.message || t("control.errorDefault"));
     } finally {
@@ -281,6 +321,9 @@ export function ControlScreen() {
             data={history}
             keyExtractor={(item) => item.id}
             loading={loading}
+            page={page}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
             emptyTitle={t("control.emptyTitle")}
             emptyMessage={t("control.emptyMessage")}
           />

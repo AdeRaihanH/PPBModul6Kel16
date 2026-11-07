@@ -1,5 +1,5 @@
 import { pool } from "../config/database.js";
-import { normalizeRange } from "./readingsModel.js";
+import { normalizeSince, normalizePagination } from "./readingsModel.js";
 
 // Same bounds the app's input enforces (ControlScreen MIN/MAX_THRESHOLD). Kept in
 // sync deliberately: the UI limit is a courtesy, this one is the rule.
@@ -32,16 +32,33 @@ function assertValidValue(value) {
 
 export const ThresholdsModel = {
   async list(options = {}) {
-    const { since, limit } = normalizeRange(options);
+    const since = normalizeSince(options);
+    const { page, pageSize, offset } = normalizePagination(options);
+
+    const { rows: countRows } = await pool.query(
+      `SELECT COUNT(*)::int AS total
+       FROM public.threshold_settings
+       WHERE ($1::timestamptz IS NULL OR created_at >= $1)`,
+      [since]
+    );
+    const total = countRows[0]?.total ?? 0;
+
     const { rows } = await pool.query(
       `SELECT id, value, note, created_at
        FROM public.threshold_settings
        WHERE ($1::timestamptz IS NULL OR created_at >= $1)
        ORDER BY created_at DESC
-       LIMIT $2`,
-      [since, limit]
+       LIMIT $2 OFFSET $3`,
+      [since, pageSize, offset]
     );
-    return rows.map(normalize);
+
+    return {
+      data: rows.map(normalize),
+      page,
+      pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    };
   },
 
   async latest() {
