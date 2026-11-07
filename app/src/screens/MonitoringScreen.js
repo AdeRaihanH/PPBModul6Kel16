@@ -544,22 +544,22 @@ const makeStyles = ({ color, space, radius, shadow, type, hit }) =>
 	StyleSheet.create({
 	safe: {
 		flex: 1,
-		backgroundColor: theme.color.bg,
+		backgroundColor: color.bg,
 	},
 	container: {
 		padding: space.lg,
 		paddingBottom: space.xxl,
 		gap: space.lg,
-		backgroundColor: theme.color.bg,
+		backgroundColor: color.bg,
 	},
 	card: {
-		backgroundColor: theme.color.surface,
+		backgroundColor: color.surface,
 		padding: space.xl,
 		borderRadius: radius.card,
 		borderCurve: "continuous",
 		gap: space.md,
 		borderWidth: 1,
-		borderColor: theme.color.border,
+		borderColor: color.border,
 		boxShadow: shadow.card,
 	},
 	cardTopRow: {
@@ -573,7 +573,7 @@ const makeStyles = ({ color, space, radius, shadow, type, hit }) =>
 		fontWeight: "600",
 		textTransform: "uppercase",
 		letterSpacing: 0.8,
-		color: theme.color.text3,
+		color: color.text3,
 	},
 	chip: {
 		flexDirection: "row",
@@ -624,13 +624,13 @@ const makeStyles = ({ color, space, radius, shadow, type, hit }) =>
 	temperatureText: {
 		fontSize: 30,
 		fontWeight: "700",
-		color: theme.color.text,
+		color: color.text,
 		fontVariant: ["tabular-nums"],
 	},
 	unitText: {
 		fontSize: 15,
 		fontWeight: "600",
-		color: theme.color.text2,
+		color: color.text2,
 	},
 	statusWord: {
 		fontSize: 13,
@@ -647,7 +647,7 @@ const makeStyles = ({ color, space, radius, shadow, type, hit }) =>
 	},
 	metaText: {
 		fontSize: 13,
-		color: theme.color.text2,
+		color: color.text2,
 		fontVariant: ["tabular-nums"],
 	},
 	sectionHeader: {
@@ -666,10 +666,10 @@ const makeStyles = ({ color, space, radius, shadow, type, hit }) =>
 	sectionTitle: {
 		fontSize: type.section,
 		fontWeight: "700",
-		color: theme.color.text,
+		color: color.text,
 	},
 	countPill: {
-		backgroundColor: theme.color.surface2,
+		backgroundColor: color.surface2,
 		borderRadius: radius.pill,
 		borderCurve: "continuous",
 		paddingVertical: 4,
@@ -678,7 +678,7 @@ const makeStyles = ({ color, space, radius, shadow, type, hit }) =>
 	countText: {
 		fontSize: 12,
 		fontWeight: "600",
-		color: theme.color.text2,
+		color: color.text2,
 		fontVariant: ["tabular-nums"],
 	},
 	rangeRow: {
@@ -693,20 +693,20 @@ const makeStyles = ({ color, space, radius, shadow, type, hit }) =>
 		borderRadius: radius.chip,
 		borderCurve: "continuous",
 		borderWidth: 1,
-		borderColor: theme.color.border,
-		backgroundColor: theme.color.surface,
+		borderColor: color.border,
+		backgroundColor: color.surface,
 	},
 	rangeChipActive: {
-		backgroundColor: theme.color.primary,
-		borderColor: theme.color.primary,
+		backgroundColor: color.primary,
+		borderColor: color.primary,
 	},
 	rangeChipText: {
 		fontSize: 13,
 		fontWeight: "600",
-		color: theme.color.text2,
+		color: color.text2,
 	},
 	rangeChipTextActive: {
-		color: theme.color.onPrimary,
+		color: color.onPrimary,
 	},
 	noticeRow: {
 		flexDirection: "row",
@@ -718,15 +718,15 @@ const makeStyles = ({ color, space, radius, shadow, type, hit }) =>
 		flex: 1,
 		fontSize: 12,
 		lineHeight: 17,
-		color: theme.color.text3,
+		color: color.text3,
 	},
 	errorBanner: {
 		flexDirection: "row",
 		alignItems: "center",
 		gap: space.md,
-		backgroundColor: theme.color.dangerBg,
+		backgroundColor: color.dangerBg,
 		borderWidth: 1,
-		borderColor: theme.color.dangerBorder,
+		borderColor: color.dangerBorder,
 		borderRadius: radius.input,
 		borderCurve: "continuous",
 		padding: space.md,
@@ -738,11 +738,11 @@ const makeStyles = ({ color, space, radius, shadow, type, hit }) =>
 	errorBannerTitle: {
 		fontSize: 14,
 		fontWeight: "600",
-		color: theme.color.dangerText,
+		color: color.dangerText,
 	},
 	errorBannerText: {
 		fontSize: 13,
-		color: theme.color.dangerText,
+		color: color.dangerText,
 	},
 	retryButton: {
 		minHeight: hit,
@@ -752,7 +752,7 @@ const makeStyles = ({ color, space, radius, shadow, type, hit }) =>
 	retryText: {
 		fontSize: 14,
 		fontWeight: "600",
-		color: theme.color.dangerText,
+		color: color.dangerText,
 	},
 	pressed: {
 		opacity: 0.9,

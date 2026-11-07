@@ -275,7 +275,7 @@ const makeStyles = ({ color, space, radius, shadow, type, hit }) =>
   StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: theme.color.bg,
+    backgroundColor: color.bg,
   },
   flex: {
     flex: 1,
@@ -284,22 +284,22 @@ const makeStyles = ({ color, space, radius, shadow, type, hit }) =>
     padding: space.lg,
     paddingBottom: 32,
     gap: space.lg,
-    backgroundColor: theme.color.bg,
+    backgroundColor: color.bg,
   },
   card: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: color.surface,
     padding: space.xl,
     borderRadius: radius.card,
     borderCurve: "continuous",
     gap: space.lg,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: color.border,
     boxShadow: shadow.card,
   },
   title: {
     fontSize: type.title,
     fontWeight: "700",
-    color: theme.color.text,
+    color: color.text,
     letterSpacing: -0.5,
   },
   titleRow: {
@@ -312,7 +312,7 @@ const makeStyles = ({ color, space, radius, shadow, type, hit }) =>
     flexDirection: "row",
     alignItems: "center",
     gap: space.sm,
-    backgroundColor: theme.color.surface2,
+    backgroundColor: color.surface2,
     borderRadius: radius.pill,
     borderCurve: "continuous",
     paddingVertical: 6,
@@ -321,16 +321,16 @@ const makeStyles = ({ color, space, radius, shadow, type, hit }) =>
   currentText: {
     fontSize: 13,
     fontWeight: "600",
-    color: theme.color.text2,
+    color: color.text2,
     fontVariant: ["tabular-nums"],
   },
   successBanner: {
     flexDirection: "row",
     alignItems: "center",
     gap: space.sm,
-    backgroundColor: theme.color.successBg,
+    backgroundColor: color.successBg,
     borderWidth: 1,
-    borderColor: theme.color.successBorder,
+    borderColor: color.successBorder,
     borderRadius: radius.input,
     borderCurve: "continuous",
     padding: space.md,
@@ -338,7 +338,7 @@ const makeStyles = ({ color, space, radius, shadow, type, hit }) =>
   successText: {
     fontSize: 14,
     fontWeight: "600",
-    color: theme.color.successText,
+    color: color.successText,
   },
   field: {
     gap: space.sm,
@@ -351,39 +351,39 @@ const makeStyles = ({ color, space, radius, shadow, type, hit }) =>
   label: {
     fontSize: 14,
     fontWeight: "600",
-    color: theme.color.text,
+    color: color.text,
   },
   required: {
-    color: theme.color.dangerText,
+    color: color.dangerText,
   },
   counter: {
     fontSize: 12,
-    color: theme.color.text3,
+    color: color.text3,
     fontVariant: ["tabular-nums"],
   },
   helper: {
     fontSize: 13,
-    color: theme.color.text2,
+    color: color.text2,
   },
   input: {
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: color.border,
     borderRadius: radius.input,
     borderCurve: "continuous",
     paddingVertical: 12,
     paddingHorizontal: 14,
     minHeight: 48,
     fontSize: 17,
-    color: theme.color.text,
-    backgroundColor: theme.color.surface,
+    color: color.text,
+    backgroundColor: color.surface,
     fontVariant: ["tabular-nums"],
   },
   inputError: {
-    borderColor: theme.color.dangerText,
+    borderColor: color.dangerText,
   },
   fieldError: {
     fontSize: 13,
-    color: theme.color.dangerText,
+    color: color.dangerText,
   },
   noteInput: {
     minHeight: 64,
@@ -396,9 +396,9 @@ const makeStyles = ({ color, space, radius, shadow, type, hit }) =>
     flexDirection: "row",
     alignItems: "center",
     gap: space.sm,
-    backgroundColor: theme.color.dangerBg,
+    backgroundColor: color.dangerBg,
     borderWidth: 1,
-    borderColor: theme.color.dangerBorder,
+    borderColor: color.dangerBorder,
     borderRadius: radius.input,
     borderCurve: "continuous",
     padding: space.md,
@@ -406,11 +406,11 @@ const makeStyles = ({ color, space, radius, shadow, type, hit }) =>
   errorBannerText: {
     flex: 1,
     fontSize: 14,
-    color: theme.color.dangerText,
+    color: color.dangerText,
   },
   button: {
     minHeight: 52,
-    backgroundColor: theme.color.primary,
+    backgroundColor: color.primary,
     borderRadius: radius.cta,
     borderCurve: "continuous",
     alignItems: "center",
@@ -425,7 +425,7 @@ const makeStyles = ({ color, space, radius, shadow, type, hit }) =>
     transform: [{ scale: 0.98 }],
   },
   buttonText: {
-    color: theme.color.onPrimary,
+    color: color.onPrimary,
     fontWeight: "600",
     fontSize: 16,
   },
@@ -440,7 +440,7 @@ const makeStyles = ({ color, space, radius, shadow, type, hit }) =>
   sectionTitle: {
     fontSize: type.section,
     fontWeight: "700",
-    color: theme.color.text,
+    color: color.text,
   },
 });
 
