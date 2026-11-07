@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Keyboard,
   KeyboardAvoidingView,
@@ -15,9 +15,9 @@ import { useFocusEffect } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Api } from "../services/api.js";
 import { DataTable } from "../components/DataTable.js";
-import { tokens } from "../theme/tokens.js";
+import { useTheme, useThemedStyles } from "../theme/ThemeProvider.js";
 
-const { color, space, radius, shadow } = tokens;
+
 const MIN_THRESHOLD = -50;
 const MAX_THRESHOLD = 100;
 
@@ -29,6 +29,8 @@ function parseThreshold(text) {
 }
 
 export function ControlScreen() {
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [thresholdText, setThresholdText] = useState("30");
   const [note, setNote] = useState("");
   const [touched, setTouched] = useState({ threshold: false });
@@ -123,9 +125,9 @@ export function ControlScreen() {
               <Text style={styles.title}>Configure Threshold</Text>
               {typeof latestThreshold === "number" ? (
                 <View style={styles.currentPill} accessible accessibilityLabel={`Current threshold ${Number(latestThreshold).toFixed(2)} degrees`}>
-                  <Ionicons name="speedometer-outline" size={16} color={color.text2} />
+                  <Ionicons name="speedometer-outline" size={16} color={theme.color.text2} />
                   <Text style={styles.currentText}>
-                    Current: {Number(latestThreshold).toFixed(2)}°C
+                    Current: {Number(latestThreshold).toFixed(2)}Â°C
                   </Text>
                 </View>
               ) : null}
@@ -138,7 +140,7 @@ export function ControlScreen() {
                 accessibilityLiveRegion="polite"
                 accessibilityLabel="Threshold saved"
               >
-                <Ionicons name="checkmark-circle" size={18} color={color.successText} />
+                <Ionicons name="checkmark-circle" size={18} color={theme.color.successText} />
                 <Text style={styles.successText}>Threshold saved</Text>
               </View>
             ) : null}
@@ -148,7 +150,7 @@ export function ControlScreen() {
                 style={styles.label}
                 accessibilityLabel="Threshold in degrees Celsius, required"
               >
-                Threshold (°C) <Text style={styles.required}>*</Text>
+                Threshold (Â°C) <Text style={styles.required}>*</Text>
               </Text>
               <Text style={styles.helper}>Alert when temperature exceeds this value.</Text>
               <TextInput
@@ -190,7 +192,7 @@ export function ControlScreen() {
                 numberOfLines={3}
                 maxLength={140}
                 placeholder="Describe why you are changing the threshold"
-                placeholderTextColor={color.text3}
+                placeholderTextColor={theme.color.text3}
                 returnKeyType="done"
                 accessibilityLabel="Note, optional"
                 accessibilityHint="Reason for changing the threshold"
@@ -205,7 +207,7 @@ export function ControlScreen() {
                 accessibilityLiveRegion="polite"
                 accessibilityLabel={`Error: ${error}`}
               >
-                <Ionicons name="alert-circle-outline" size={18} color={color.dangerText} />
+                <Ionicons name="alert-circle-outline" size={18} color={theme.color.dangerText} />
                 <Text style={styles.errorBannerText}>{error}</Text>
               </View>
             ) : null}
@@ -224,7 +226,7 @@ export function ControlScreen() {
               accessibilityHint="Saves the new temperature threshold"
             >
               {submitting ? (
-                <ActivityIndicator color={color.onPrimary} />
+                <ActivityIndicator color={theme.color.onPrimary} />
               ) : (
                 <Text style={styles.buttonText}>Save Threshold</Text>
               )}
@@ -244,7 +246,7 @@ export function ControlScreen() {
               },
               {
                 key: "value",
-                title: "Threshold °C",
+                title: "Threshold Â°C",
                 flex: 0.9,
                 numeric: true,
                 render: (value) =>
@@ -254,7 +256,7 @@ export function ControlScreen() {
                 key: "note",
                 title: "Note",
                 flex: 1.1,
-                render: (value) => value || "—",
+                render: (value) => value || "â€”",
               },
             ]}
             data={history}
@@ -269,10 +271,11 @@ export function ControlScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, space, radius, shadow, type, hit }) =>
+  StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: color.bg,
+    backgroundColor: theme.color.bg,
   },
   flex: {
     flex: 1,
@@ -281,22 +284,22 @@ const styles = StyleSheet.create({
     padding: space.lg,
     paddingBottom: 32,
     gap: space.lg,
-    backgroundColor: color.bg,
+    backgroundColor: theme.color.bg,
   },
   card: {
-    backgroundColor: color.surface,
+    backgroundColor: theme.color.surface,
     padding: space.xl,
     borderRadius: radius.card,
     borderCurve: "continuous",
     gap: space.lg,
     borderWidth: 1,
-    borderColor: color.border,
+    borderColor: theme.color.border,
     boxShadow: shadow.card,
   },
   title: {
-    fontSize: tokens.type.title,
+    fontSize: type.title,
     fontWeight: "700",
-    color: color.text,
+    color: theme.color.text,
     letterSpacing: -0.5,
   },
   titleRow: {
@@ -309,7 +312,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: space.sm,
-    backgroundColor: color.surface2,
+    backgroundColor: theme.color.surface2,
     borderRadius: radius.pill,
     borderCurve: "continuous",
     paddingVertical: 6,
@@ -318,16 +321,16 @@ const styles = StyleSheet.create({
   currentText: {
     fontSize: 13,
     fontWeight: "600",
-    color: color.text2,
+    color: theme.color.text2,
     fontVariant: ["tabular-nums"],
   },
   successBanner: {
     flexDirection: "row",
     alignItems: "center",
     gap: space.sm,
-    backgroundColor: color.successBg,
+    backgroundColor: theme.color.successBg,
     borderWidth: 1,
-    borderColor: color.successBorder,
+    borderColor: theme.color.successBorder,
     borderRadius: radius.input,
     borderCurve: "continuous",
     padding: space.md,
@@ -335,7 +338,7 @@ const styles = StyleSheet.create({
   successText: {
     fontSize: 14,
     fontWeight: "600",
-    color: color.successText,
+    color: theme.color.successText,
   },
   field: {
     gap: space.sm,
@@ -348,44 +351,44 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: "600",
-    color: color.text,
+    color: theme.color.text,
   },
   required: {
-    color: color.dangerText,
+    color: theme.color.dangerText,
   },
   counter: {
     fontSize: 12,
-    color: color.text3,
+    color: theme.color.text3,
     fontVariant: ["tabular-nums"],
   },
   helper: {
     fontSize: 13,
-    color: color.text2,
+    color: theme.color.text2,
   },
   input: {
     borderWidth: 1,
-    borderColor: color.border,
+    borderColor: theme.color.border,
     borderRadius: radius.input,
     borderCurve: "continuous",
     paddingVertical: 12,
     paddingHorizontal: 14,
     minHeight: 48,
     fontSize: 17,
-    color: color.text,
-    backgroundColor: color.surface,
+    color: theme.color.text,
+    backgroundColor: theme.color.surface,
     fontVariant: ["tabular-nums"],
   },
   inputError: {
-    borderColor: color.dangerText,
+    borderColor: theme.color.dangerText,
   },
   fieldError: {
     fontSize: 13,
-    color: color.dangerText,
+    color: theme.color.dangerText,
   },
   noteInput: {
     minHeight: 64,
     textAlignVertical: "top",
-    // ponytail: gap between wrapped lines only — py trimmed via minHeight/padding
+    // ponytail: gap between wrapped lines only â€” py trimmed via minHeight/padding
     lineHeight: 22,
     paddingVertical: 8,
   },
@@ -393,9 +396,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: space.sm,
-    backgroundColor: color.dangerBg,
+    backgroundColor: theme.color.dangerBg,
     borderWidth: 1,
-    borderColor: color.dangerBorder,
+    borderColor: theme.color.dangerBorder,
     borderRadius: radius.input,
     borderCurve: "continuous",
     padding: space.md,
@@ -403,11 +406,11 @@ const styles = StyleSheet.create({
   errorBannerText: {
     flex: 1,
     fontSize: 14,
-    color: color.dangerText,
+    color: theme.color.dangerText,
   },
   button: {
     minHeight: 52,
-    backgroundColor: color.primary,
+    backgroundColor: theme.color.primary,
     borderRadius: radius.cta,
     borderCurve: "continuous",
     alignItems: "center",
@@ -422,7 +425,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
   },
   buttonText: {
-    color: color.onPrimary,
+    color: theme.color.onPrimary,
     fontWeight: "600",
     fontSize: 16,
   },
@@ -435,8 +438,9 @@ const styles = StyleSheet.create({
     marginBottom: -space.sm,
   },
   sectionTitle: {
-    fontSize: tokens.type.section,
+    fontSize: type.section,
     fontWeight: "700",
-    color: color.text,
+    color: theme.color.text,
   },
 });
+

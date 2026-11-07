@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	Pressable,
 	RefreshControl,
@@ -23,9 +23,7 @@ import { Api } from "../services/api.js";
 import { DataTable } from "../components/DataTable.js";
 import { TempOrb } from "../components/TempOrb.js";
 import { ThermalGuardCard } from "../components/ThermalGuardCard.js";
-import { tokens } from "../theme/tokens.js";
-
-const { color, space, radius, shadow } = tokens;
+import { useTheme, useThemedStyles } from "../theme/ThemeProvider.js";
 
 // History ranges. `ms: null` means no lower bound.
 const RANGES = [
@@ -38,6 +36,8 @@ const DEFAULT_RANGE = "1h";
 const HISTORY_LIMIT = 200;
 
 function StatusChip({ connectionState, hasError, onRetry }) {
+	const theme = useTheme();
+	const styles = useThemedStyles(makeStyles);
 	const config = useMemo(() => {
 		if (
 			hasError ||
@@ -45,33 +45,33 @@ function StatusChip({ connectionState, hasError, onRetry }) {
 			connectionState === "disconnected"
 		) {
 			return {
-				bg: color.dangerBg,
-				border: color.dangerBorder,
-				text: color.dangerText,
-				dot: color.dangerText,
+				bg: theme.color.dangerBg,
+				border: theme.color.dangerBorder,
+				text: theme.color.dangerText,
+				dot: theme.color.dangerText,
 				label: "Offline",
 				actionable: true,
 			};
 		}
 		if (connectionState === "reconnecting") {
 			return {
-				bg: color.warnBg,
-				border: color.warnBorder,
-				text: color.warnText,
-				dot: color.warnText,
-				label: "Reconnecting…",
+				bg: theme.color.warnBg,
+				border: theme.color.warnBorder,
+				text: theme.color.warnText,
+				dot: theme.color.warnText,
+				label: "Reconnectingâ€¦",
 				actionable: false,
 			};
 		}
 		return {
-			bg: color.successBg,
-			border: color.successBorder,
-			text: color.successText,
-			dot: color.successText,
+			bg: theme.color.successBg,
+			border: theme.color.successBorder,
+			text: theme.color.successText,
+			dot: theme.color.successText,
 			label: "Connected",
 			actionable: false,
 		};
-	}, [connectionState, hasError]);
+	}, [connectionState, hasError, theme]);
 
 	const chip = (
 		<View
@@ -111,6 +111,8 @@ function StatusChip({ connectionState, hasError, onRetry }) {
 }
 
 export function MonitoringScreen() {
+	const theme = useTheme();
+	const styles = useThemedStyles(makeStyles);
 	const {
 		temperature,
 		timestamp,
@@ -186,6 +188,8 @@ export function MonitoringScreen() {
 		}
 	}, [fetchReadings]);
 
+	// The orb's label comes from the same proximity state the panel uses, so the
+	// two can never disagree about how close the reading is.
 	const proximity = useMemo(() => {
 		if (
 			typeof temperature !== "number" ||
@@ -193,20 +197,13 @@ export function MonitoringScreen() {
 		) {
 			return null;
 		}
-		let tone = "below threshold";
-		let statusWord = "Normal";
-		let statusColor = color.successText;
-		if (temperature >= latestThreshold) {
-			tone = "at or above threshold";
-			statusWord = "Over limit";
-			statusColor = color.dangerText;
-		} else if (temperature >= latestThreshold - 2) {
-			tone = "near threshold";
-			statusWord = "Near limit";
-			statusColor = color.warnText;
-		}
-		return { tone, statusWord, statusColor };
-	}, [temperature, latestThreshold]);
+		const words = {
+			safe: { statusWord: "Normal", statusColor: theme.color.successText },
+			near: { statusWord: "Near limit", statusColor: theme.color.warnText },
+			over: { statusWord: "Over limit", statusColor: theme.color.dangerText },
+		};
+		return words[analytics.proximity.state] ?? null;
+	}, [temperature, latestThreshold, analytics.proximity.state, theme]);
 
 	const freshness = useMemo(() => {
 		if (!Array.isArray(readings) || readings.length === 0) {
@@ -219,7 +216,7 @@ export function MonitoringScreen() {
 			: Math.max(0, Math.round((Date.now() - t.getTime()) / 1000));
 		const rel =
 			s < 10 ? "just now" : s < 60 ? `${s}s ago` : `${Math.floor(s / 60)}m ago`;
-		return `Updated ${rel} · ${readings.length} ${
+		return `Updated ${rel} Â· ${readings.length} ${
 			readings.length === 1 ? "reading" : "readings"
 		}`;
 	}, [readings]);
@@ -241,7 +238,7 @@ export function MonitoringScreen() {
 					<RefreshControl
 						refreshing={refreshing}
 						onRefresh={onRefresh}
-						tintColor={color.primary}
+						tintColor={theme.color.primary}
 					/>
 				}
 			>
@@ -250,7 +247,7 @@ export function MonitoringScreen() {
 					entering={
 						reduceMotion
 							? FadeIn.duration(150)
-							: FadeInDown.duration(tokens.motion.entering)
+							: FadeInDown.duration(theme.motion.entering)
 					}
 				>
 					<View style={styles.cardTopRow}>
@@ -271,7 +268,7 @@ export function MonitoringScreen() {
 					>
 						<View style={styles.orbWrap}>
 							<TempOrb
-								tint={proximity ? proximity.statusColor : color.text}
+								tint={proximity ? proximity.statusColor : theme.color.text}
 								beatKey={beatKey}
 								dimmed={
 									connectionState !== "connected" &&
@@ -284,7 +281,7 @@ export function MonitoringScreen() {
 									<Text
 										style={[
 											styles.temperatureText,
-											{ color: proximity ? proximity.statusColor : color.text },
+											{ color: proximity ? proximity.statusColor : theme.color.text },
 										]}
 										selectable
 									>
@@ -294,11 +291,11 @@ export function MonitoringScreen() {
 										style={[
 											styles.unitText,
 											{
-												color: proximity ? proximity.statusColor : color.text2,
+												color: proximity ? proximity.statusColor : theme.color.text2,
 											},
 										]}
 									>
-										°C
+										Â°C
 									</Text>
 								</View>
 								{proximity ? (
@@ -321,23 +318,23 @@ export function MonitoringScreen() {
 								<Ionicons
 									name="speedometer-outline"
 									size={15}
-									color={color.text3}
+									color={theme.color.text3}
 								/>
 								<Text style={styles.metaText}>
-									Threshold {latestThreshold.toFixed(2)}°C
+									Threshold {latestThreshold.toFixed(2)}Â°C
 								</Text>
 							</View>
 						) : null}
 						{timestamp ? (
 							<View style={styles.metaRow}>
-								<Ionicons name="time-outline" size={15} color={color.text3} />
+								<Ionicons name="time-outline" size={15} color={theme.color.text3} />
 								<Text style={styles.metaText}>
 									Last update {new Date(timestamp).toLocaleString()}
 								</Text>
 							</View>
 						) : null}
 						<View style={styles.metaRow}>
-							<Ionicons name="refresh-outline" size={15} color={color.text3} />
+							<Ionicons name="refresh-outline" size={15} color={theme.color.text3} />
 							<Text style={styles.metaText}>{freshness}</Text>
 						</View>
 						<View style={styles.metaRow}>
@@ -350,10 +347,10 @@ export function MonitoringScreen() {
 								size={15}
 								color={
 									backend.state === "ok"
-										? color.text3
+										? theme.color.text3
 										: backend.state === "degraded"
-											? color.warnText
-											: color.dangerText
+											? theme.color.warnText
+											: theme.color.dangerText
 								}
 							/>
 							<Text
@@ -362,18 +359,18 @@ export function MonitoringScreen() {
 									backend.state !== "ok" && {
 										color:
 											backend.state === "degraded"
-												? color.warnText
-												: color.dangerText,
+												? theme.color.warnText
+												: theme.color.dangerText,
 									},
 								]}
 							>
 								{backend.state === "ok"
-									? `Database ok · ${backend.latencyMs ?? "?"} ms`
+									? `Database ok Â· ${backend.latencyMs ?? "?"} ms`
 									: backend.state === "degraded"
 										? "Database unavailable"
 										: backend.state === "unreachable"
 											? "Backend unreachable"
-											: "Checking backend…"}
+											: "Checking backendâ€¦"}
 							</Text>
 						</View>
 					</View>
@@ -388,7 +385,7 @@ export function MonitoringScreen() {
 							<Ionicons
 								name="cloud-offline-outline"
 								size={18}
-								color={color.dangerText}
+								color={theme.color.dangerText}
 							/>
 							<View style={styles.errorBannerTextWrap}>
 								<Text style={styles.errorBannerTitle}>Sensor feed offline</Text>
@@ -417,7 +414,7 @@ export function MonitoringScreen() {
 						<Ionicons
 							name="notifications-off-outline"
 							size={15}
-							color={color.text3}
+							color={theme.color.text3}
 						/>
 						<Text style={styles.noticeText}>
 							Notifications are off, so a breach only shows on this screen. Allow them
@@ -436,7 +433,7 @@ export function MonitoringScreen() {
 						<Ionicons
 							name="alert-circle-outline"
 							size={18}
-							color={color.dangerText}
+							color={theme.color.dangerText}
 						/>
 						<View style={styles.errorBannerTextWrap}>
 							<Text style={styles.errorBannerTitle}>Couldn't load history</Text>
@@ -513,7 +510,7 @@ export function MonitoringScreen() {
 						},
 						{
 							key: "temperature",
-							title: "Temp °C",
+							title: "Temp Â°C",
 							flex: 0.9,
 							numeric: true,
 							render: (value) =>
@@ -521,7 +518,7 @@ export function MonitoringScreen() {
 						},
 						{
 							key: "threshold_value",
-							title: "Limit °C",
+							title: "Limit Â°C",
 							flex: 0.9,
 							numeric: true,
 							render: (value) =>
@@ -543,25 +540,26 @@ export function MonitoringScreen() {
 	);
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, space, radius, shadow, type, hit }) =>
+	StyleSheet.create({
 	safe: {
 		flex: 1,
-		backgroundColor: color.bg,
+		backgroundColor: theme.color.bg,
 	},
 	container: {
 		padding: space.lg,
 		paddingBottom: space.xxl,
 		gap: space.lg,
-		backgroundColor: color.bg,
+		backgroundColor: theme.color.bg,
 	},
 	card: {
-		backgroundColor: color.surface,
+		backgroundColor: theme.color.surface,
 		padding: space.xl,
 		borderRadius: radius.card,
 		borderCurve: "continuous",
 		gap: space.md,
 		borderWidth: 1,
-		borderColor: color.border,
+		borderColor: theme.color.border,
 		boxShadow: shadow.card,
 	},
 	cardTopRow: {
@@ -575,7 +573,7 @@ const styles = StyleSheet.create({
 		fontWeight: "600",
 		textTransform: "uppercase",
 		letterSpacing: 0.8,
-		color: color.text3,
+		color: theme.color.text3,
 	},
 	chip: {
 		flexDirection: "row",
@@ -626,13 +624,13 @@ const styles = StyleSheet.create({
 	temperatureText: {
 		fontSize: 30,
 		fontWeight: "700",
-		color: color.text,
+		color: theme.color.text,
 		fontVariant: ["tabular-nums"],
 	},
 	unitText: {
 		fontSize: 15,
 		fontWeight: "600",
-		color: color.text2,
+		color: theme.color.text2,
 	},
 	statusWord: {
 		fontSize: 13,
@@ -649,7 +647,7 @@ const styles = StyleSheet.create({
 	},
 	metaText: {
 		fontSize: 13,
-		color: color.text2,
+		color: theme.color.text2,
 		fontVariant: ["tabular-nums"],
 	},
 	sectionHeader: {
@@ -666,12 +664,12 @@ const styles = StyleSheet.create({
 		gap: space.sm,
 	},
 	sectionTitle: {
-		fontSize: tokens.type.section,
+		fontSize: type.section,
 		fontWeight: "700",
-		color: color.text,
+		color: theme.color.text,
 	},
 	countPill: {
-		backgroundColor: color.surface2,
+		backgroundColor: theme.color.surface2,
 		borderRadius: radius.pill,
 		borderCurve: "continuous",
 		paddingVertical: 4,
@@ -680,7 +678,7 @@ const styles = StyleSheet.create({
 	countText: {
 		fontSize: 12,
 		fontWeight: "600",
-		color: color.text2,
+		color: theme.color.text2,
 		fontVariant: ["tabular-nums"],
 	},
 	rangeRow: {
@@ -695,20 +693,20 @@ const styles = StyleSheet.create({
 		borderRadius: radius.chip,
 		borderCurve: "continuous",
 		borderWidth: 1,
-		borderColor: color.border,
-		backgroundColor: color.surface,
+		borderColor: theme.color.border,
+		backgroundColor: theme.color.surface,
 	},
 	rangeChipActive: {
-		backgroundColor: color.primary,
-		borderColor: color.primary,
+		backgroundColor: theme.color.primary,
+		borderColor: theme.color.primary,
 	},
 	rangeChipText: {
 		fontSize: 13,
 		fontWeight: "600",
-		color: color.text2,
+		color: theme.color.text2,
 	},
 	rangeChipTextActive: {
-		color: color.onPrimary,
+		color: theme.color.onPrimary,
 	},
 	noticeRow: {
 		flexDirection: "row",
@@ -720,15 +718,15 @@ const styles = StyleSheet.create({
 		flex: 1,
 		fontSize: 12,
 		lineHeight: 17,
-		color: color.text3,
+		color: theme.color.text3,
 	},
 	errorBanner: {
 		flexDirection: "row",
 		alignItems: "center",
 		gap: space.md,
-		backgroundColor: color.dangerBg,
+		backgroundColor: theme.color.dangerBg,
 		borderWidth: 1,
-		borderColor: color.dangerBorder,
+		borderColor: theme.color.dangerBorder,
 		borderRadius: radius.input,
 		borderCurve: "continuous",
 		padding: space.md,
@@ -740,24 +738,25 @@ const styles = StyleSheet.create({
 	errorBannerTitle: {
 		fontSize: 14,
 		fontWeight: "600",
-		color: color.dangerText,
+		color: theme.color.dangerText,
 	},
 	errorBannerText: {
 		fontSize: 13,
-		color: color.dangerText,
+		color: theme.color.dangerText,
 	},
 	retryButton: {
-		minHeight: tokens.hit,
+		minHeight: hit,
 		justifyContent: "center",
 		paddingHorizontal: space.md,
 	},
 	retryText: {
 		fontSize: 14,
 		fontWeight: "600",
-		color: color.dangerText,
+		color: theme.color.dangerText,
 	},
 	pressed: {
 		opacity: 0.9,
 		transform: [{ scale: 0.98 }],
 	},
 });
+

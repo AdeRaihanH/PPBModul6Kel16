@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { View, StyleSheet } from "react-native";
 import {
 	Canvas,
@@ -17,9 +17,7 @@ import {
 	useReducedMotion,
 	useSharedValue,
 } from "react-native-reanimated";
-import { tokens } from "../theme/tokens.js";
-
-const { color } = tokens;
+import { useTheme, useThemedStyles } from "../theme/ThemeProvider.js";
 
 const PAD_X = 8;
 const PAD_TOP = 12;
@@ -42,7 +40,10 @@ function finishPath(builder) {
  * No projection line: this panel reports what was measured, and a dotted
  * "forecast" would imply a prediction the data does not support.
  */
-export function Sparkline({ samples = [], threshold = null, tint = color.primary, height = 136 }) {
+export function Sparkline({ samples = [], threshold = null, tint, height = 136 }) {
+	const theme = useTheme();
+	const styles = useThemedStyles(makeStyles);
+	const traceColor = tint ?? theme.color.primary;
 	const [width, setWidth] = useState(0);
 	const focused = useIsFocused();
 	const reduceMotion = useReducedMotion();
@@ -137,7 +138,7 @@ export function Sparkline({ samples = [], threshold = null, tint = color.primary
 						<LinearGradient
 							start={vec(0, PAD_TOP)}
 							end={vec(0, height - PAD_BOTTOM)}
-							colors={[`${tint}38`, `${tint}00`]}
+							colors={[`${traceColor}38`, `${traceColor}00`]}
 						/>
 					</Path>
 
@@ -145,7 +146,7 @@ export function Sparkline({ samples = [], threshold = null, tint = color.primary
 						path={geometry.line}
 						style="stroke"
 						strokeWidth={2.25}
-						color={tint}
+						color={traceColor}
 						strokeJoin="round"
 						strokeCap="round"
 					/>
@@ -154,7 +155,7 @@ export function Sparkline({ samples = [], threshold = null, tint = color.primary
 						<Line
 							p1={vec(PAD_X, geometry.thresholdY)}
 							p2={vec(width - PAD_X, geometry.thresholdY)}
-							color={color.dangerBorder}
+							color={theme.color.dangerBorder}
 							strokeWidth={1.5}
 							style="stroke"
 						>
@@ -166,10 +167,10 @@ export function Sparkline({ samples = [], threshold = null, tint = color.primary
 						cx={geometry.lastX}
 						cy={geometry.lastY}
 						r={ringRadius}
-						color={tint}
+						color={traceColor}
 						opacity={ringOpacity}
 					/>
-					<Circle cx={geometry.lastX} cy={geometry.lastY} r={3.5} color={tint} />
+					<Circle cx={geometry.lastX} cy={geometry.lastY} r={3.5} color={traceColor} />
 				</Canvas>
 			) : (
 				<View style={styles.placeholder}>
@@ -180,18 +181,20 @@ export function Sparkline({ samples = [], threshold = null, tint = color.primary
 	);
 }
 
-const styles = StyleSheet.create({
-	wrap: {
-		width: "100%",
-		justifyContent: "center",
-	},
-	placeholder: {
-		flex: 1,
-		justifyContent: "center",
-		paddingHorizontal: PAD_X,
-	},
-	baseline: {
-		height: 1,
-		backgroundColor: color.border,
-	},
-});
+const makeStyles = ({ color }) =>
+	StyleSheet.create({
+		wrap: {
+			width: "100%",
+			justifyContent: "center",
+		},
+		placeholder: {
+			flex: 1,
+			justifyContent: "center",
+			paddingHorizontal: PAD_X,
+		},
+		baseline: {
+			height: 1,
+			backgroundColor: color.border,
+		},
+	});
+

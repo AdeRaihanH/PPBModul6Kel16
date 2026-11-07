@@ -1,24 +1,26 @@
 import { Text, View, StyleSheet } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Sparkline } from "./Sparkline.js";
-import { tokens } from "../theme/tokens.js";
+import { useTheme, useThemedStyles } from "../theme/ThemeProvider.js";
 
-const { color, space, radius, shadow } = tokens;
-
-const TONES = {
-	success: {
-		bg: color.successBg,
-		border: color.successBorder,
-		text: color.successText,
-	},
-	warn: { bg: color.warnBg, border: color.warnBorder, text: color.warnText },
-	danger: {
-		bg: color.dangerBg,
-		border: color.dangerBorder,
-		text: color.dangerText,
-	},
-	muted: { bg: color.surface2, border: color.border, text: color.text3 },
-};
+// Tones depend on the palette, so they are built per render from the theme rather
+// than frozen at module load.
+function buildTones(color) {
+	return {
+		success: {
+			bg: color.successBg,
+			border: color.successBorder,
+			text: color.successText,
+		},
+		warn: { bg: color.warnBg, border: color.warnBorder, text: color.warnText },
+		danger: {
+			bg: color.dangerBg,
+			border: color.dangerBorder,
+			text: color.dangerText,
+		},
+		muted: { bg: color.surface2, border: color.border, text: color.text3 },
+	};
+}
 
 const STATUS_ICON = {
 	waiting: "ellipsis-horizontal",
@@ -28,8 +30,9 @@ const STATUS_ICON = {
 	over: "alert-circle",
 };
 
-function Stat({ label, value, unit, tone = "muted" }) {
-	const palette = TONES[tone] ?? TONES.muted;
+function Stat({ label, value, unit, tone, tones }) {
+	const styles = useThemedStyles(makeStyles);
+	const palette = tones[tone] ?? tones.muted;
 	return (
 		<View
 			style={[styles.stat, { borderColor: palette.border, backgroundColor: palette.bg }]}
@@ -63,9 +66,13 @@ function rateLabel(rate) {
 }
 
 export function ThermalGuardCard({ analytics }) {
+	const theme = useTheme();
+	const styles = useThemedStyles(makeStyles);
+	const tones = buildTones(theme.color);
+
 	const { samples, stats, rate, proximity, status, anomaly, threshold } = analytics;
 
-	const palette = TONES[status.tone] ?? TONES.muted;
+	const palette = tones[status.tone] ?? tones.muted;
 
 	const rising = typeof rate === "number" && rate > 0.05;
 	const falling = typeof rate === "number" && rate < -0.05;
@@ -121,9 +128,22 @@ export function ThermalGuardCard({ analytics }) {
 					value={rateLabel(rate)}
 					unit="°C/min"
 					tone={rateTone}
+					tones={tones}
 				/>
-				<Stat label="Margin" value={marginValue} unit={marginUnit} tone={status.tone} />
-				<Stat label="Peak" value={stats ? stats.max.toFixed(1) : "--"} unit="°C" />
+				<Stat
+					label="Margin"
+					value={marginValue}
+					unit={marginUnit}
+					tone={status.tone}
+					tones={tones}
+				/>
+				<Stat
+					label="Peak"
+					value={stats ? stats.max.toFixed(1) : "--"}
+					unit="°C"
+					tone="muted"
+					tones={tones}
+				/>
 			</View>
 
 			{(rising || falling) && status.key !== "waiting" ? (
@@ -131,7 +151,7 @@ export function ThermalGuardCard({ analytics }) {
 					<Ionicons
 						name={rising ? "trending-up" : "trending-down"}
 						size={13}
-						color={color.text3}
+						color={theme.color.text3}
 					/>
 					<Text style={styles.trendText}>
 						{rising ? "Rising" : "Falling"} {Math.abs(rate).toFixed(1)} °C/min over the
@@ -149,7 +169,7 @@ export function ThermalGuardCard({ analytics }) {
 						1,
 					)} sigma away from the trend`}
 				>
-					<Ionicons name="pulse-outline" size={16} color={color.warnText} />
+					<Ionicons name="pulse-outline" size={16} color={theme.color.warnText} />
 					<Text style={styles.anomalyText}>
 						Sensor anomaly — {anomaly.score.toFixed(1)}σ off the trend.
 					</Text>
@@ -159,100 +179,101 @@ export function ThermalGuardCard({ analytics }) {
 	);
 }
 
-const styles = StyleSheet.create({
-	card: {
-		backgroundColor: color.surface,
-		padding: space.lg,
-		borderRadius: radius.card,
-		borderCurve: "continuous",
-		borderWidth: 1,
-		borderColor: color.border,
-		boxShadow: shadow.card,
-		gap: space.md,
-	},
-	headerRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "space-between",
-		gap: space.sm,
-	},
-	title: {
-		fontSize: tokens.type.section,
-		fontWeight: "700",
-		color: color.text,
-	},
-	statusPill: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 5,
-		paddingVertical: 5,
-		paddingHorizontal: 10,
-		borderRadius: radius.chip,
-		borderCurve: "continuous",
-		borderWidth: 1,
-	},
-	statusText: {
-		fontSize: 12,
-		fontWeight: "700",
-	},
-	statGrid: {
-		flexDirection: "row",
-		gap: space.sm,
-	},
-	stat: {
-		flex: 1,
-		borderWidth: 1,
-		borderRadius: radius.input,
-		borderCurve: "continuous",
-		paddingVertical: 10,
-		paddingHorizontal: 10,
-		gap: 2,
-	},
-	statLabel: {
-		fontSize: 11,
-		fontWeight: "600",
-		textTransform: "uppercase",
-		letterSpacing: 0.6,
-		color: color.text3,
-	},
-	statValueRow: {
-		flexDirection: "row",
-		alignItems: "baseline",
-		gap: 3,
-	},
-	statValue: {
-		fontSize: 18,
-		fontWeight: "700",
-		fontVariant: ["tabular-nums"],
-	},
-	statUnit: {
-		fontSize: 11,
-		fontWeight: "600",
-	},
-	trendRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 6,
-	},
-	trendText: {
-		fontSize: 11,
-		color: color.text3,
-		fontVariant: ["tabular-nums"],
-	},
-	anomalyBanner: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: space.sm,
-		backgroundColor: color.warnBg,
-		borderWidth: 1,
-		borderColor: color.warnBorder,
-		borderRadius: radius.input,
-		borderCurve: "continuous",
-		padding: space.sm,
-	},
-	anomalyText: {
-		flex: 1,
-		fontSize: 12,
-		color: color.warnText,
-	},
-});
+const makeStyles = ({ color, space, radius, shadow, type }) =>
+	StyleSheet.create({
+		card: {
+			backgroundColor: color.surface,
+			padding: space.lg,
+			borderRadius: radius.card,
+			borderCurve: "continuous",
+			borderWidth: 1,
+			borderColor: color.border,
+			boxShadow: shadow.card,
+			gap: space.md,
+		},
+		headerRow: {
+			flexDirection: "row",
+			alignItems: "center",
+			justifyContent: "space-between",
+			gap: space.sm,
+		},
+		title: {
+			fontSize: type.section,
+			fontWeight: "700",
+			color: color.text,
+		},
+		statusPill: {
+			flexDirection: "row",
+			alignItems: "center",
+			gap: 5,
+			paddingVertical: 5,
+			paddingHorizontal: 10,
+			borderRadius: radius.chip,
+			borderCurve: "continuous",
+			borderWidth: 1,
+		},
+		statusText: {
+			fontSize: 12,
+			fontWeight: "700",
+		},
+		statGrid: {
+			flexDirection: "row",
+			gap: space.sm,
+		},
+		stat: {
+			flex: 1,
+			borderWidth: 1,
+			borderRadius: radius.input,
+			borderCurve: "continuous",
+			paddingVertical: 10,
+			paddingHorizontal: 10,
+			gap: 2,
+		},
+		statLabel: {
+			fontSize: 11,
+			fontWeight: "600",
+			textTransform: "uppercase",
+			letterSpacing: 0.6,
+			color: color.text3,
+		},
+		statValueRow: {
+			flexDirection: "row",
+			alignItems: "baseline",
+			gap: 3,
+		},
+		statValue: {
+			fontSize: 18,
+			fontWeight: "700",
+			fontVariant: ["tabular-nums"],
+		},
+		statUnit: {
+			fontSize: 11,
+			fontWeight: "600",
+		},
+		trendRow: {
+			flexDirection: "row",
+			alignItems: "center",
+			gap: 6,
+		},
+		trendText: {
+			fontSize: 11,
+			color: color.text3,
+			fontVariant: ["tabular-nums"],
+		},
+		anomalyBanner: {
+			flexDirection: "row",
+			alignItems: "center",
+			gap: space.sm,
+			backgroundColor: color.warnBg,
+			borderWidth: 1,
+			borderColor: color.warnBorder,
+			borderRadius: radius.input,
+			borderCurve: "continuous",
+			padding: space.sm,
+		},
+		anomalyText: {
+			flex: 1,
+			fontSize: 12,
+			color: color.warnText,
+		},
+	});
