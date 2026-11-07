@@ -1,13 +1,15 @@
 import { memo } from "react";
 import { Pressable, Text, View, StyleSheet } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { useLanguage } from "../i18n/LanguageProvider.js";
 import { tokens } from "../theme/tokens.js";
 
 const { color, space, radius, shadow } = tokens;
 
 function SkeletonRows({ count = 3 }) {
+  const { t } = useLanguage();
   return (
-    <View accessible accessibilityLabel="Loading data">
+    <View accessible accessibilityLabel={t("dataTable.loading")}>
       {Array.from({ length: count }).map((_, i) => (
         <View key={i} style={[styles.dataRow, i === 0 && styles.firstDataRow]}>
           <View style={[styles.skeleton, { flex: 1.4 }]} />
@@ -76,13 +78,16 @@ export function DataTable({
   columns,
   data,
   keyExtractor,
-  emptyTitle = "No data yet",
-  emptyMessage = "Items will appear here.",
+  emptyTitle,
+  emptyMessage,
   emptyActionLabel,
   onEmptyAction,
   loading = false,
   loadingRows = 3,
 }) {
+  const { t } = useLanguage();
+  const resolvedEmptyTitle = emptyTitle ?? t("dataTable.noData");
+  const resolvedEmptyMessage = emptyMessage ?? t("dataTable.noDataMessage");
   if (!columns?.length) {
     return null;
   }
@@ -93,7 +98,7 @@ export function DataTable({
     <View
       style={styles.container}
       accessible
-      accessibilityLabel="Data table"
+      accessibilityLabel={t("dataTable.label")}
       accessibilityRole="none"
     >
       <View style={styles.headerRow} accessibilityRole="header">
@@ -125,8 +130,8 @@ export function DataTable({
       ) : (
         <View style={styles.emptyWrap}>
           <Ionicons name="file-tray-outline" size={24} color={color.text3} />
-          <Text style={styles.emptyTitle}>{emptyTitle}</Text>
-          <Text style={styles.emptyMessage}>{emptyMessage}</Text>
+          <Text style={styles.emptyTitle}>{resolvedEmptyTitle}</Text>
+          <Text style={styles.emptyMessage}>{resolvedEmptyMessage}</Text>
           {emptyActionLabel && onEmptyAction ? (
             <Pressable
               style={({ pressed }) => [

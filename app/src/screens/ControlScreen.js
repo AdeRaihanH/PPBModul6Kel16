@@ -15,6 +15,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Api } from "../services/api.js";
 import { DataTable } from "../components/DataTable.js";
+import { useLanguage } from "../i18n/LanguageProvider.js";
 import { tokens } from "../theme/tokens.js";
 
 const { color, space, radius, shadow } = tokens;
@@ -29,6 +30,7 @@ function parseThreshold(text) {
 }
 
 export function ControlScreen() {
+  const { t, formatNumber, formatDateTime } = useLanguage();
   const [thresholdText, setThresholdText] = useState("30");
   const [note, setNote] = useState("");
   const [touched, setTouched] = useState({ threshold: false });
@@ -55,11 +57,11 @@ export function ControlScreen() {
       const data = await Api.getThresholds();
       setHistory(data ?? []);
     } catch (err) {
-      setError(err.message || "Couldn't load history. Try again.");
+      setError(err.message || t("control.historyErrorDefault"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -71,12 +73,14 @@ export function ControlScreen() {
 
   const parsed = useMemo(() => parseThreshold(thresholdText), [thresholdText]);
   const thresholdError = useMemo(() => {
-    if (parsed === null) return `Enter a number between ${MIN_THRESHOLD} and ${MAX_THRESHOLD}.`;
+    if (parsed === null) {
+      return t("control.rangeError", { min: MIN_THRESHOLD, max: MAX_THRESHOLD });
+    }
     if (parsed < MIN_THRESHOLD || parsed > MAX_THRESHOLD) {
-      return `Enter a number between ${MIN_THRESHOLD} and ${MAX_THRESHOLD}.`;
+      return t("control.rangeError", { min: MIN_THRESHOLD, max: MAX_THRESHOLD });
     }
     return null;
-  }, [parsed]);
+  }, [parsed, t]);
 
   const showThresholdError = touched.threshold && thresholdError !== null;
   const canSave = !submitting && thresholdError === null;
@@ -84,7 +88,7 @@ export function ControlScreen() {
 
   const handleSubmit = useCallback(async () => {
     Keyboard.dismiss();
-    setTouched((t) => ({ ...t, threshold: true }));
+    setTouched((prev) => ({ ...prev, threshold: true }));
     if (thresholdError !== null) {
       thresholdRef.current?.focus();
       return;
@@ -99,11 +103,11 @@ export function ControlScreen() {
       successTimer.current = setTimeout(() => setShowSuccess(false), 3000);
       await fetchHistory();
     } catch (err) {
-      setError(err.message || "Couldn't save. Try again.");
+      setError(err.message || t("control.errorDefault"));
     } finally {
       setSubmitting(false);
     }
-  }, [thresholdError, parsed, note, fetchHistory]);
+  }, [thresholdError, parsed, note, fetchHistory, t]);
 
   return (
     <View style={styles.safe}>
@@ -120,12 +124,18 @@ export function ControlScreen() {
         >
           <View style={styles.card}>
             <View style={styles.titleRow}>
-              <Text style={styles.title}>Configure Threshold</Text>
+              <Text style={styles.title}>{t("control.title")}</Text>
               {typeof latestThreshold === "number" ? (
-                <View style={styles.currentPill} accessible accessibilityLabel={`Current threshold ${Number(latestThreshold).toFixed(2)} degrees`}>
+                <View
+                  style={styles.currentPill}
+                  accessible
+                  accessibilityLabel={t("control.currentA11y", {
+                    value: formatNumber(latestThreshold),
+                  })}
+                >
                   <Ionicons name="speedometer-outline" size={16} color={color.text2} />
                   <Text style={styles.currentText}>
-                    Current: {Number(latestThreshold).toFixed(2)}°C
+                    {t("control.current", { value: formatNumber(latestThreshold) })}
                   </Text>
                 </View>
               ) : null}
@@ -136,35 +146,38 @@ export function ControlScreen() {
                 style={styles.successBanner}
                 accessible
                 accessibilityLiveRegion="polite"
-                accessibilityLabel="Threshold saved"
+                accessibilityLabel={t("control.saved")}
               >
                 <Ionicons name="checkmark-circle" size={18} color={color.successText} />
-                <Text style={styles.successText}>Threshold saved</Text>
+                <Text style={styles.successText}>{t("control.saved")}</Text>
               </View>
             ) : null}
 
             <View style={styles.field}>
               <Text
                 style={styles.label}
-                accessibilityLabel="Threshold in degrees Celsius, required"
+                accessibilityLabel={t("control.thresholdA11y")}
               >
-                Threshold (°C) <Text style={styles.required}>*</Text>
+                {t("control.thresholdLabel")} <Text style={styles.required}>*</Text>
               </Text>
-              <Text style={styles.helper}>Alert when temperature exceeds this value.</Text>
+              <Text style={styles.helper}>{t("control.helper")}</Text>
               <TextInput
                 ref={thresholdRef}
                 style={[styles.input, showThresholdError && styles.inputError]}
                 keyboardType="decimal-pad"
                 returnKeyType="next"
                 value={thresholdText}
-                onChangeText={(t) => {
-                  setThresholdText(t);
+                onChangeText={(next) => {
+                  setThresholdText(next);
                   if (showSuccess) setShowSuccess(false);
                 }}
-                onBlur={() => setTouched((t) => ({ ...t, threshold: true }))}
+                onBlur={() => setTouched((prev) => ({ ...prev, threshold: true }))}
                 onSubmitEditing={() => noteRef.current?.focus()}
-                accessibilityLabel="Threshold in degrees Celsius, required"
-                accessibilityHint={`Number between ${MIN_THRESHOLD} and ${MAX_THRESHOLD}`}
+                accessibilityLabel={t("control.thresholdA11y")}
+                accessibilityHint={t("control.rangeHint", {
+                  min: MIN_THRESHOLD,
+                  max: MAX_THRESHOLD,
+                })}
                 accessibilityState={{ invalid: showThresholdError }}
                 maxLength={8}
                 selectTextOnFocus
@@ -178,7 +191,7 @@ export function ControlScreen() {
 
             <View style={styles.field}>
               <View style={styles.labelRow}>
-                <Text style={styles.label}>Note</Text>
+                <Text style={styles.label}>{t("control.noteLabel")}</Text>
                 <Text style={styles.counter}>{noteCount}</Text>
               </View>
               <TextInput
@@ -189,11 +202,11 @@ export function ControlScreen() {
                 multiline
                 numberOfLines={3}
                 maxLength={140}
-                placeholder="Describe why you are changing the threshold"
+                placeholder={t("control.notePlaceholder")}
                 placeholderTextColor={color.text3}
                 returnKeyType="done"
-                accessibilityLabel="Note, optional"
-                accessibilityHint="Reason for changing the threshold"
+                accessibilityLabel={t("control.noteA11y")}
+                accessibilityHint={t("control.noteHint")}
                 onSubmitEditing={handleSubmit}
               />
             </View>
@@ -203,7 +216,7 @@ export function ControlScreen() {
                 style={styles.errorBanner}
                 accessible
                 accessibilityLiveRegion="polite"
-                accessibilityLabel={`Error: ${error}`}
+                accessibilityLabel={t("control.errorA11y", { message: error })}
               >
                 <Ionicons name="alert-circle-outline" size={18} color={color.dangerText} />
                 <Text style={styles.errorBannerText}>{error}</Text>
@@ -218,41 +231,40 @@ export function ControlScreen() {
               ]}
               onPress={handleSubmit}
               disabled={!canSave}
-              accessibilityLabel="Save threshold"
+              accessibilityLabel={t("control.saveA11y")}
               accessibilityRole="button"
               accessibilityState={{ disabled: !canSave, busy: submitting }}
-              accessibilityHint="Saves the new temperature threshold"
+              accessibilityHint={t("control.saveHint")}
             >
               {submitting ? (
                 <ActivityIndicator color={color.onPrimary} />
               ) : (
-                <Text style={styles.buttonText}>Save Threshold</Text>
+                <Text style={styles.buttonText}>{t("control.save")}</Text>
               )}
             </Pressable>
           </View>
 
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Threshold history</Text>
+            <Text style={styles.sectionTitle}>{t("control.historyTitle")}</Text>
           </View>
           <DataTable
             columns={[
               {
                 key: "created_at",
-                title: "Saved At",
+                title: t("control.columnSavedAt"),
                 flex: 1.4,
-                render: (value) => (value ? new Date(value).toLocaleString() : "--"),
+                render: (value) => (value ? formatDateTime(value) : "--"),
               },
               {
                 key: "value",
-                title: "Threshold °C",
+                title: t("control.columnThreshold"),
                 flex: 0.9,
                 numeric: true,
-                render: (value) =>
-                  typeof value === "number" ? Number(value).toFixed(2) : "--",
+                render: (value) => formatNumber(value),
               },
               {
                 key: "note",
-                title: "Note",
+                title: t("control.columnNote"),
                 flex: 1.1,
                 render: (value) => value || "—",
               },
@@ -260,8 +272,8 @@ export function ControlScreen() {
             data={history}
             keyExtractor={(item) => item.id}
             loading={loading}
-            emptyTitle="No thresholds yet"
-            emptyMessage="Save your first threshold above."
+            emptyTitle={t("control.emptyTitle")}
+            emptyMessage={t("control.emptyMessage")}
           />
         </ScrollView>
       </KeyboardAvoidingView>

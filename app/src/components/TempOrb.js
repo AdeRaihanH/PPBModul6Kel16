@@ -148,6 +148,7 @@ export function TempOrb({
   useEffect(() => {
     try {
       const initial = projectAll(0.6, 1, R, cx, cy);
+      // eslint-disable-next-line react-hooks/immutability -- reanimated shared value write is the intended API
       transforms.value = transforms.value.map((slot, i) => {
         slot.set(initial[i][0], initial[i][1], initial[i][2], initial[i][3]);
         return slot;
@@ -187,6 +188,7 @@ export function TempOrb({
   const frame = useFrameCallback((info) => {
     "worklet";
     const dt = Math.min(0.05, (info.timeSincePreviousFrame ?? 16) / 1000);
+    // eslint-disable-next-line react-hooks/immutability -- worklet: mutating shared values is the reanimated idiom
     spinBoost.value *= Math.pow(0.02, dt);
     angleY.value += dt * (BASE_SPEED + spinBoost.value);
   });

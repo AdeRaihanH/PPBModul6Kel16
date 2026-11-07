@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
 	Pressable,
 	RefreshControl,
@@ -18,11 +18,13 @@ import { useMqttSensor } from "../hooks/useMqttSensor.js";
 import { Api } from "../services/api.js";
 import { DataTable } from "../components/DataTable.js";
 import { TempOrb } from "../components/TempOrb.js";
+import { useLanguage } from "../i18n/LanguageProvider.js";
 import { tokens } from "../theme/tokens.js";
 
 const { color, space, radius, shadow } = tokens;
 
 function StatusChip({ connectionState, hasError, onRetry }) {
+	const { t } = useLanguage();
 	const config = useMemo(() => {
 		if (
 			hasError ||
@@ -34,7 +36,7 @@ function StatusChip({ connectionState, hasError, onRetry }) {
 				border: color.dangerBorder,
 				text: color.dangerText,
 				dot: color.dangerText,
-				label: "Offline",
+				label: t("monitoring.offline"),
 				actionable: true,
 			};
 		}
@@ -44,7 +46,7 @@ function StatusChip({ connectionState, hasError, onRetry }) {
 				border: color.warnBorder,
 				text: color.warnText,
 				dot: color.warnText,
-				label: "Reconnecting…",
+				label: t("monitoring.reconnecting"),
 				actionable: false,
 			};
 		}
@@ -53,10 +55,10 @@ function StatusChip({ connectionState, hasError, onRetry }) {
 			border: color.successBorder,
 			text: color.successText,
 			dot: color.successText,
-			label: "Connected",
+			label: t("monitoring.connected"),
 			actionable: false,
 		};
-	}, [connectionState, hasError]);
+	}, [connectionState, hasError, t]);
 
 	const chip = (
 		<View
@@ -65,7 +67,7 @@ function StatusChip({ connectionState, hasError, onRetry }) {
 				{ backgroundColor: config.bg, borderColor: config.border },
 			]}
 			accessible
-			accessibilityLabel={`Sensor feed ${config.label}`}
+			accessibilityLabel={t("monitoring.chipA11y", { status: config.label })}
 			accessibilityRole="text"
 		>
 			<View style={[styles.dot, { backgroundColor: config.dot }]} />
@@ -82,9 +84,9 @@ function StatusChip({ connectionState, hasError, onRetry }) {
 		return (
 			<Pressable
 				onPress={onRetry}
-				accessibilityLabel="Retry sensor feed"
+				accessibilityLabel={t("monitoring.retryFeed")}
 				accessibilityRole="button"
-				accessibilityHint="Attempts to reload sensor history"
+				accessibilityHint={t("monitoring.retryFeedHint")}
 				hitSlop={8}
 				style={({ pressed }) => [pressed && styles.pressed]}
 			>
@@ -102,11 +104,13 @@ export function MonitoringScreen() {
 		connectionState,
 		error: mqttError,
 	} = useMqttSensor();
+	const { t, formatNumber, formatDateTime } = useLanguage();
 	const [readings, setReadings] = useState([]);
 	const [latestThreshold, setLatestThreshold] = useState(null);
 	const [loading, setLoading] = useState(false);
 	const [refreshing, setRefreshing] = useState(false);
 	const [apiError, setApiError] = useState(null);
+	const [now, setNow] = useState(null);
 	const reduceMotion = useReducedMotion();
 
 	const fetchReadings = useCallback(async () => {
@@ -121,11 +125,11 @@ export function MonitoringScreen() {
 			const latest = Array.isArray(thresholds) ? thresholds[0]?.value : null;
 			setLatestThreshold(typeof latest === "number" ? latest : null);
 		} catch (err) {
-			setApiError(err.message || "Couldn't load history.");
+			setApiError(err.message || t("monitoring.errorDefault"));
 		} finally {
 			setLoading(false);
 		}
-	}, []);
+	}, [t]);
 
 	useFocusEffect(
 		useCallback(() => {
@@ -135,6 +139,7 @@ export function MonitoringScreen() {
 
 	const onRefresh = useCallback(async () => {
 		setRefreshing(true);
+		setNow(Date.now());
 		try {
 			await fetchReadings();
 		} finally {
@@ -150,38 +155,64 @@ export function MonitoringScreen() {
 			return null;
 		}
 		let tone = "below threshold";
-		let statusWord = "Normal";
+		let statusWord = t("status.normal");
 		let statusColor = color.successText;
 		if (temperature >= latestThreshold) {
 			tone = "at or above threshold";
-			statusWord = "Over limit";
+			statusWord = t("status.over");
 			statusColor = color.dangerText;
 		} else if (temperature >= latestThreshold - 2) {
 			tone = "near threshold";
-			statusWord = "Near limit";
+			statusWord = t("status.near");
 			statusColor = color.warnText;
 		}
 		return { tone, statusWord, statusColor };
-	}, [temperature, latestThreshold]);
+	}, [temperature, latestThreshold, t]);
+
+	// ponytail: Date.now() is impure — "now" lives in state (ticked below)
+	// so the freshness memo stays pure and the label refreshes live.
+	useEffect(() => {
+		let cancelled = false;
+		const tick = () => {
+			if (!cancelled) setNow(Date.now());
+		};
+		const first = setTimeout(tick, 0);
+		const interval = setInterval(tick, 30_000);
+		return () => {
+			cancelled = true;
+			clearTimeout(first);
+			clearInterval(interval);
+		};
+	}, []);
 
 	const freshness = useMemo(() => {
+		if (now == null) return "";
 		if (!Array.isArray(readings) || readings.length === 0) {
-			return "No readings yet";
+			return t("monitoring.emptyTitle");
 		}
 		const first = readings[0];
-		const t = new Date(first.recorded_at ?? first.timestamp ?? Date.now());
-		const s = Number.isNaN(t.getTime())
+		const d = new Date(first.recorded_at ?? first.timestamp ?? now);
+		const s = Number.isNaN(d.getTime())
 			? 0
-			: Math.max(0, Math.round((Date.now() - t.getTime()) / 1000));
+			: Math.max(0, Math.round((now - d.getTime()) / 1000));
 		const rel =
-			s < 10 ? "just now" : s < 60 ? `${s}s ago` : `${Math.floor(s / 60)}m ago`;
-		return `Updated ${rel} · ${readings.length} ${
-			readings.length === 1 ? "reading" : "readings"
-		}`;
-	}, [readings]);
+			s < 10
+				? t("monitoring.justNow")
+				: s < 60
+					? t("monitoring.secondsAgo", { s })
+					: t("monitoring.minutesAgo", { m: Math.floor(s / 60) });
+		return t("monitoring.updated", {
+			rel,
+			count: readings.length,
+			unit:
+				readings.length === 1
+					? t("monitoring.readingOne")
+					: t("monitoring.readingOther"),
+		});
+	}, [readings, now, t]);
 
 	const tempLabel =
-		typeof temperature === "number" ? `${temperature.toFixed(2)}` : "--";
+		typeof temperature === "number" ? formatNumber(temperature) : "--";
 
 	const beatKey =
 		typeof timestamp === "string" && !Number.isNaN(Date.parse(timestamp))
@@ -210,7 +241,7 @@ export function MonitoringScreen() {
 					}
 				>
 					<View style={styles.cardTopRow}>
-						<Text style={styles.eyebrow}>Live temperature</Text>
+						<Text style={styles.eyebrow}>{t("monitoring.eyebrow")}</Text>
 						<StatusChip
 							connectionState={connectionState}
 							hasError={Boolean(mqttError)}
@@ -221,9 +252,10 @@ export function MonitoringScreen() {
 					<View
 						style={styles.orbStage}
 						accessible
-						accessibilityLabel={`Current temperature ${tempLabel} degrees Celsius${
-							proximity ? `, ${proximity.statusWord}` : ""
-						}`}
+						accessibilityLabel={t("monitoring.temperatureA11y", {
+							value: tempLabel,
+							status: proximity ? `, ${proximity.statusWord}` : "",
+						})}
 					>
 						<View style={styles.orbWrap}>
 							<TempOrb
@@ -280,7 +312,9 @@ export function MonitoringScreen() {
 									color={color.text3}
 								/>
 								<Text style={styles.metaText}>
-									Threshold {latestThreshold.toFixed(2)}°C
+									{t("monitoring.threshold", {
+										value: formatNumber(latestThreshold),
+									})}
 								</Text>
 							</View>
 						) : null}
@@ -288,7 +322,9 @@ export function MonitoringScreen() {
 							<View style={styles.metaRow}>
 								<Ionicons name="time-outline" size={15} color={color.text3} />
 								<Text style={styles.metaText}>
-									Last update {new Date(timestamp).toLocaleString()}
+									{t("monitoring.lastUpdate", {
+										time: formatDateTime(timestamp),
+									})}
 								</Text>
 							</View>
 						) : null}
@@ -303,7 +339,9 @@ export function MonitoringScreen() {
 							style={styles.errorBanner}
 							accessible
 							accessibilityLiveRegion="polite"
-							accessibilityLabel={`Sensor feed offline. ${mqttError}`}
+							accessibilityLabel={t("monitoring.feedOfflineA11y", {
+								error: mqttError,
+							})}
 						>
 							<Ionicons
 								name="cloud-offline-outline"
@@ -311,12 +349,14 @@ export function MonitoringScreen() {
 								color={color.dangerText}
 							/>
 							<View style={styles.errorBannerTextWrap}>
-								<Text style={styles.errorBannerTitle}>Sensor feed offline</Text>
+								<Text style={styles.errorBannerTitle}>
+									{t("monitoring.feedOfflineTitle")}
+								</Text>
 								<Text style={styles.errorBannerText}>{mqttError}</Text>
 							</View>
 							<Pressable
 								onPress={onRefresh}
-								accessibilityLabel="Retry sensor feed"
+								accessibilityLabel={t("monitoring.retryFeed")}
 								accessibilityRole="button"
 								hitSlop={8}
 								style={({ pressed }) => [
@@ -324,7 +364,7 @@ export function MonitoringScreen() {
 									pressed && styles.pressed,
 								]}
 							>
-								<Text style={styles.retryText}>Retry</Text>
+								<Text style={styles.retryText}>{t("monitoring.retry")}</Text>
 							</Pressable>
 						</View>
 					) : null}
@@ -335,7 +375,9 @@ export function MonitoringScreen() {
 						style={styles.errorBanner}
 						accessible
 						accessibilityLiveRegion="polite"
-						accessibilityLabel={`Couldn't load history. ${apiError}`}
+						accessibilityLabel={t("monitoring.historyErrorA11y", {
+							error: apiError,
+						})}
 					>
 						<Ionicons
 							name="alert-circle-outline"
@@ -343,12 +385,14 @@ export function MonitoringScreen() {
 							color={color.dangerText}
 						/>
 						<View style={styles.errorBannerTextWrap}>
-							<Text style={styles.errorBannerTitle}>Couldn't load history</Text>
+							<Text style={styles.errorBannerTitle}>
+								{t("monitoring.historyErrorTitle")}
+							</Text>
 							<Text style={styles.errorBannerText}>{apiError}</Text>
 						</View>
 						<Pressable
 							onPress={fetchReadings}
-							accessibilityLabel="Retry loading history"
+							accessibilityLabel={t("monitoring.retryHistory")}
 							accessibilityRole="button"
 							hitSlop={8}
 							style={({ pressed }) => [
@@ -356,19 +400,23 @@ export function MonitoringScreen() {
 								pressed && styles.pressed,
 							]}
 						>
-							<Text style={styles.retryText}>Retry</Text>
+							<Text style={styles.retryText}>{t("monitoring.refresh")}</Text>
 						</Pressable>
 					</View>
 				) : null}
 
 				<View style={styles.sectionHeader}>
 					<View style={styles.sectionTitleRow}>
-						<Text style={styles.sectionTitle}>Triggered Alarm History</Text>
+						<Text style={styles.sectionTitle}>
+							{t("monitoring.historyTitle")}
+						</Text>
 						{Array.isArray(readings) && readings.length > 0 ? (
 							<View style={styles.countPill}>
 								<Text style={styles.countText}>
 									{readings.length}{" "}
-									{readings.length === 1 ? "reading" : "readings"}
+									{readings.length === 1
+										? t("monitoring.readingOne")
+										: t("monitoring.readingOther")}
 								</Text>
 							</View>
 						) : null}
@@ -379,35 +427,32 @@ export function MonitoringScreen() {
 					columns={[
 						{
 							key: "recorded_at",
-							title: "Timestamp",
+							title: t("monitoring.columnTimestamp"),
 							flex: 1.5,
 							// ponytail: same single-line format as threshold history
-							render: (value) =>
-								value ? new Date(value).toLocaleString() : "--",
+							render: (value) => (value ? formatDateTime(value) : "--"),
 						},
 						{
 							key: "temperature",
-							title: "Temp °C",
+							title: t("monitoring.columnTemp"),
 							flex: 0.9,
 							numeric: true,
-							render: (value) =>
-								typeof value === "number" ? Number(value).toFixed(2) : "--",
+							render: (value) => formatNumber(value),
 						},
 						{
 							key: "threshold_value",
-							title: "Limit °C",
+							title: t("monitoring.columnLimit"),
 							flex: 0.9,
 							numeric: true,
-							render: (value) =>
-								typeof value === "number" ? Number(value).toFixed(2) : "--",
+							render: (value) => formatNumber(value),
 						},
 					]}
 					data={readings}
 					keyExtractor={(item) => item.id}
 					loading={loading && !refreshing}
-					emptyTitle="No readings yet"
-					emptyMessage="Triggered readings appear here. Pull to refresh."
-					emptyActionLabel="Refresh"
+					emptyTitle={t("monitoring.emptyTitle")}
+					emptyMessage={t("monitoring.emptyMessage")}
+					emptyActionLabel={t("monitoring.refresh")}
 					onEmptyAction={fetchReadings}
 				/>
 			</ScrollView>
