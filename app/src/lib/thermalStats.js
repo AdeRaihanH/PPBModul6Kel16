@@ -1,11 +1,28 @@
 // Pure statistics for the predictive panel. No React, no native imports —
 // kept separate so the math can be exercised on its own (see scripts/check-thermal-stats.mjs).
 
-export const WINDOW_SIZE = 48; // rolling samples kept for the fit (~4 min at 5 s publish)
+export const WINDOW_SIZE = 48; // rolling samples kept for the chart (~4 min at 5 s publish)
+// Rate and ETA are fitted over this shorter tail instead of the whole window.
+// A full-window fit answers "what has the last few minutes been doing", which
+// keeps reporting a rise long after the sensor has turned around. Eight samples
+// is ~35 s: long enough to beat sensor noise, short enough to follow a turn
+// before the reading goes stale.
+export const TREND_WINDOW = 8;
 export const MIN_FIT_POINTS = 4;
-export const MIN_ANOMALY_POINTS = 10;
+// Enough points for the slope to mean something. Kept below TREND_WINDOW so a
+// change to the window size cannot silently disable the estimate.
+export const MIN_TRUST_POINTS = 6;
+// Anomaly detection deliberately runs on the long window: with only a handful of
+// points one big outlier drags the fitted line towards itself, inflating the
+// spread it is then measured against, so a +11 °C spike scored a harmless 2.5σ.
+// Over a long window the outlier stays a clear outlier.
+export const MIN_ANOMALY_POINTS = 12;
 export const ANOMALY_SIGMA = 4;
-export const MIN_CONFIDENCE = 0.3;
+// R² of 0.30 sounds like a trend but is not one: over eight points that is
+// p ≈ 0.16, so random data passes it about a third of the time. 0.5 is roughly
+// p ≈ 0.05 at this sample size, which random walks clear only ~1% of the time
+// while a genuine ramp sits near 0.99.
+export const MIN_CONFIDENCE = 0.5;
 export const MAX_ETA_SECONDS = 60 * 60;
 // Below this the spread is measurement resolution, not signal — dividing by it
 // would report an absurd sigma for a perfectly linear trace.
@@ -126,7 +143,9 @@ export function projectCrossing(samples, threshold) {
 
 	const etaSec = gap / fit.slope;
 	const trustworthy =
-		fit.r2 >= MIN_CONFIDENCE && etaSec <= MAX_ETA_SECONDS && samples.length >= 8;
+		fit.r2 >= MIN_CONFIDENCE &&
+		etaSec <= MAX_ETA_SECONDS &&
+		samples.length >= MIN_TRUST_POINTS;
 
 	return {
 		willCross: trustworthy,

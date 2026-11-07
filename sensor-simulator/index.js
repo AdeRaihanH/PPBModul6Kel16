@@ -6,11 +6,11 @@ const TOPIC = "ppb/kel16/iot/temperature";
 const BACKEND_BASE_URL = "http://localhost:5002";
 const PUBLISH_INTERVAL_MS = 5000;
 
-// `npm start -- --trend` sends a rising ramp instead of random noise, so the
-// app's predictive panel has a trend it can actually project. Default stays
-// random so nothing about the original behaviour changes.
-const useTrend = process.argv.includes("--trend");
-const nextTemperature = useTrend ? createTrendReader() : () => randomTemperature();
+// Default is the trend feed: it rises and falls like a real sensor, so the app's
+// predictive panel has something to project. `--random` restores the old
+// independent-noise feed for exercising the UI without a trend.
+const useRandom = process.argv.includes("--random");
+const nextTemperature = useRandom ? () => randomTemperature() : createTrendReader();
 
 const clientId = `simulator-${Math.random().toString(16).slice(2)}`;
 const client = mqtt.connect(BROKER_URL, {
@@ -22,9 +22,9 @@ const client = mqtt.connect(BROKER_URL, {
 client.on("connect", () => {
 	console.log(`MQTT connected as ${clientId}`);
 	console.log(
-		useTrend
-			? "Mode: trend (24 → 32 °C, repeats) — predictive ETA should appear"
-			: "Mode: random (20 → 35 °C) — no trend, so ETA stays hidden",
+		useRandom
+			? "Mode: random (20 → 35 °C) — no trend, so ETA stays hidden"
+			: "Mode: trend (24 → 32 °C, heats then cools) — ETA should appear",
 	);
 });
 

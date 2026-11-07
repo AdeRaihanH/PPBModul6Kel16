@@ -63,36 +63,45 @@ a dotted continuation, and an anomaly banner when a reading breaks the trend.
 
 ### Seeing the ETA work
 
-The default simulator sends an independent random number every 5 s, so there is
-no trend to project and the ETA correctly stays blank. To demonstrate it:
+The default simulator sends a slow ramp: 24 → 32 °C and back down, repeating.
+Threshold 30 °C is crossed about a minute after start, so the ETA counts down,
+flips to **Over**, then the feed cools and the status turns **Falling**.
 
 ```bash
 cd sensor-simulator
-npm start -- --trend      # 24 → 32 °C ramp, repeats
+npm start                 # trend feed (default)
+npm start -- --random     # old independent-noise feed, no trend to project
 ```
 
-That is the same app code path — only the shape of the incoming data changes.
+With `--random` the ETA stays blank on purpose: there is no trend to extrapolate.
 
 ### The statistics
 
 `app/src/lib/thermalStats.js` — pure functions, no React, no native imports, so
 the math is testable in isolation.
 
-- **Rolling window** of 48 samples (~4 min at the 5 s publish rate). Old samples
-  drop off, so the model follows the current regime rather than the whole
-  session.
+- **Rolling window** of 48 samples (~4 min at the 5 s publish rate) for the chart
+  and the window figures.
+- **Rate and ETA use the last 8 samples** (~35 s), not the whole window. Fitting
+  four minutes answers "what has this been doing", which keeps reporting a rise
+  long after the sensor has turned around — raise 10 °C then drop 5 °C and the
+  whole-window slope still reads positive. Eight samples follows the turn while
+  still averaging out sensor noise.
 - **Trend**: ordinary least squares on `(t, temperature)`. Time is normalised to
   seconds from the window start — fitting against raw epoch seconds would square
   numbers around 1e18 and lose the slope in float64 rounding.
-- **Confidence**: R² of that fit. The ETA is withheld below R² 0.30, when there
-  are fewer than 8 samples, or when it projects beyond one hour. An estimate the
-  data cannot support is worse than no estimate.
-- **Anomaly**: residuals from the fitted line, then median absolute deviation
-  (MAD), scaled by 1.4826 to compare against σ. Detrending first is the whole
-  point — a healthy ramp is not an outlier, but a reading that jumps off the
-  ramp is. MAD is used instead of a standard deviation because the outlier being
-  hunted would otherwise inflate the very scale used to judge it. A floor of
-  0.01 °C stops sensor resolution from being read as a signal.
+- **Confidence**: R² of that fit. The ETA is withheld below R² 0.50, when there
+  are fewer than 6 points, or when it projects beyond one hour. R² 0.30 sounds
+  like a trend but over eight points is p ≈ 0.16, which random data clears about
+  a third of the time; 0.50 is roughly p ≈ 0.05 and a real ramp sits near 0.99.
+- **Anomaly**: residuals from the fitted line over the **long** window, then
+  median absolute deviation (MAD), scaled by 1.4826 to compare against σ.
+  Detrending first is the whole point — a healthy ramp is not an outlier, but a
+  reading that jumps off the ramp is. MAD is used instead of a standard deviation
+  because the outlier being hunted would otherwise inflate the very scale used to
+  judge it. The long window matters too: over eight points a +11 °C spike drags
+  the fitted line towards itself and scores a harmless 2.5σ; over 48 it is
+  unmistakable. A floor of 0.01 °C stops sensor resolution being read as signal.
 
 ### Design notes
 

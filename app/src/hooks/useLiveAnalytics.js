@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+	TREND_WINDOW,
 	WINDOW_SIZE,
 	describe,
 	detectAnomaly,
@@ -64,9 +65,16 @@ export function useLiveAnalytics({ temperature, timestamp, threshold }) {
 		if (!samples.length) return EMPTY;
 
 		const current = samples[samples.length - 1].v;
+		// Two different questions, two different windows. The rate and the
+		// projection describe what is happening now, so they use the recent tail.
+		// The anomaly verdict asks whether one reading is off the trend, which
+		// needs the long window: a short one lets the outlier bend the very line
+		// it is measured against.
+		const recent =
+			samples.length > TREND_WINDOW ? samples.slice(-TREND_WINDOW) : samples;
 		const stats = describe(samples);
 		const anomaly = detectAnomaly(samples);
-		const projection = projectCrossing(samples, threshold);
+		const projection = projectCrossing(recent, threshold);
 
 		const trend = projection
 			? {

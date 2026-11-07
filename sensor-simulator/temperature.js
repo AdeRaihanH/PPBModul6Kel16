@@ -4,7 +4,11 @@
 export const RANDOM_MIN = 20;
 export const RANDOM_MAX = 35;
 
-// Default mode: an independent draw every publish. Good for exercising the UI,
+export const TREND_FLOOR = 24;
+export const TREND_CEILING = 32;
+export const TREND_STEP = 0.5;
+
+// Random mode: an independent draw every publish. Good for exercising the UI,
 // useless for anything predictive — there is no trend to extrapolate, so the
 // app correctly refuses to estimate a crossing time.
 export function randomTemperature(random = Math.random) {
@@ -12,27 +16,39 @@ export function randomTemperature(random = Math.random) {
 }
 
 /**
- * Demo mode: a slow, believable ramp with a little sensor noise on top.
+ * Default mode: a slow, believable ramp with a little sensor noise on top.
  *
- * Climbs from `start` to `ceiling`, then drops back and climbs again, so a
- * threshold crossing happens repeatedly and can be demonstrated in about a
- * minute. The noise is deliberately small — enough to look like a real sensor,
- * not enough to drown the trend.
+ * Heats from 24 to 32 °C, then cools back down at the same rate, and repeats.
+ * A gradual cooldown matters: jumping straight back to 24 would look like a
+ * sensor fault and would poison any fit that spans the reset. With a triangle
+ * wave the direction reverses smoothly, so the trend and its rate of change
+ * stay meaningful the whole time.
+ *
+ * At 0.5 °C per 5 s publish that is 6 °C/min: threshold 30 °C is reached about
+ * a minute after start, which is short enough to demonstrate repeatedly.
  */
 export function createTrendReader(options = {}) {
 	const {
-		start = 24,
-		step = 0.35,
-		ceiling = 32,
+		floor = TREND_FLOOR,
+		ceiling = TREND_CEILING,
+		step = TREND_STEP,
 		noise = 0.12,
 		random = Math.random,
 	} = options;
 
-	let value = start - step;
+	let value = floor;
+	let direction = 1;
 
 	return () => {
-		value += step;
-		if (value > ceiling) value = start;
+		value += direction * step;
+
+		if (value >= ceiling) {
+			value = ceiling;
+			direction = -1;
+		} else if (value <= floor) {
+			value = floor;
+			direction = 1;
+		}
 
 		const jitter = (random() * 2 - 1) * noise;
 		return Number((value + jitter).toFixed(2));

@@ -85,22 +85,23 @@ export function ThermalGuardCard({ analytics }) {
 
 	const palette = TONES[status.tone] ?? TONES.muted;
 
+	const crossed = projection?.crossed === true;
+
 	const rateTone = !trend
 		? "muted"
-		: status.key === "critical" || status.key === "imminent"
+		: crossed || status.key === "imminent"
 			? "danger"
 			: Math.abs(trend.slopePerMin) > 0.15
 				? "warn"
 				: "success";
 
-	const etaTone =
-		status.key === "critical"
-			? "danger"
-			: projection?.willCross
-				? projection.etaSec <= 120
-					? "danger"
-					: "warn"
-				: "muted";
+	const etaTone = crossed
+		? "danger"
+		: projection?.willCross
+			? projection.etaSec <= 120
+				? "danger"
+				: "warn"
+			: "muted";
 
 	return (
 		<View style={styles.card}>
@@ -146,11 +147,19 @@ export function ThermalGuardCard({ analytics }) {
 				<Stat
 					label="ETA"
 					value={
-						<EtaValue
-							etaSec={projection?.willCross ? projection.etaSec : null}
-							sampleAt={sampleAt}
-							style={[styles.statValue, { color: TONES[etaTone].text }]}
-						/>
+						crossed ? (
+							// "0s" read like a broken timer; the limit is already breached,
+							// so say that instead of pretending there is time left.
+							<Text style={[styles.statValue, { color: TONES.danger.text }]}>
+								Over
+							</Text>
+						) : (
+							<EtaValue
+								etaSec={projection?.willCross ? projection.etaSec : null}
+								sampleAt={sampleAt}
+								style={[styles.statValue, { color: TONES[etaTone].text }]}
+							/>
+						)
 					}
 					tone={etaTone}
 				/>
