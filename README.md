@@ -66,6 +66,19 @@ reachability and query latency, and the Monitoring screen shows one line:
 `Database ok · 12 ms`, `Database unavailable`, or `Backend unreachable`. A live
 sensor feed with a dead database is not "working", and the UI now says so.
 
+**Errors are JSON everywhere.** Unknown routes, malformed bodies and unexpected
+throws all answer `{ error }` instead of Express's HTML page, and the app unwraps
+that field — otherwise a bad request would put `{"error":"…"}` (or a full HTML
+document) into the error banner. Threshold values are bounded on the server
+(`-50 … 100`) as well as in the input: an out-of-range threshold would make every
+reading look safe and silently disable the alarm.
+
+**The feed's own state is tracked.** The MQTT hook handles `close` and `offline`,
+not just `error`, so a dropped socket turns the chip to Offline within a second
+instead of claiming a live feed until the next reconnect attempt. It also starts
+as `connecting`, because a red Offline chip before the first attempt reads as a
+fault that is not there.
+
 To prove it:
 
 ```bash

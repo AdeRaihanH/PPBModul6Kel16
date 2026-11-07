@@ -5,7 +5,6 @@ import { ThresholdsModel } from "../models/thresholdsModel.js";
 function rangeFrom(req) {
   return { since: req.query.since, limit: req.query.limit };
 }
-
 export const ThresholdsController = {
   async list(req, res) {
     try {

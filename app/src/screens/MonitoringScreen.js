@@ -53,13 +53,13 @@ function StatusChip({ connectionState, hasError, onRetry }) {
 				actionable: true,
 			};
 		}
-		if (connectionState === "reconnecting") {
+		if (connectionState === "reconnecting" || connectionState === "connecting") {
 			return {
 				bg: theme.color.warnBg,
 				border: theme.color.warnBorder,
 				text: theme.color.warnText,
 				dot: theme.color.warnText,
-				label: "Reconnectingâ€¦",
+				label: connectionState === "connecting" ? "Connecting…" : "Reconnecting…",
 				actionable: false,
 			};
 		}
@@ -216,7 +216,7 @@ export function MonitoringScreen() {
 			: Math.max(0, Math.round((Date.now() - t.getTime()) / 1000));
 		const rel =
 			s < 10 ? "just now" : s < 60 ? `${s}s ago` : `${Math.floor(s / 60)}m ago`;
-		return `Updated ${rel} Â· ${readings.length} ${
+		return `Updated ${rel} · ${readings.length} ${
 			readings.length === 1 ? "reading" : "readings"
 		}`;
 	}, [readings]);
@@ -295,7 +295,7 @@ export function MonitoringScreen() {
 											},
 										]}
 									>
-										Â°C
+										°C
 									</Text>
 								</View>
 								{proximity ? (
@@ -321,7 +321,7 @@ export function MonitoringScreen() {
 									color={theme.color.text3}
 								/>
 								<Text style={styles.metaText}>
-									Threshold {latestThreshold.toFixed(2)}Â°C
+									Threshold {latestThreshold.toFixed(2)}°C
 								</Text>
 							</View>
 						) : null}
@@ -365,12 +365,12 @@ export function MonitoringScreen() {
 								]}
 							>
 								{backend.state === "ok"
-									? `Database ok Â· ${backend.latencyMs ?? "?"} ms`
+									? `Database ok · ${backend.latencyMs ?? "?"} ms`
 									: backend.state === "degraded"
 										? "Database unavailable"
 										: backend.state === "unreachable"
 											? "Backend unreachable"
-											: "Checking backendâ€¦"}
+											: "Checking backend…"}
 							</Text>
 						</View>
 					</View>
@@ -510,7 +510,7 @@ export function MonitoringScreen() {
 						},
 						{
 							key: "temperature",
-							title: "Temp Â°C",
+							title: "Temp °C",
 							flex: 0.9,
 							numeric: true,
 							render: (value) =>
@@ -518,7 +518,7 @@ export function MonitoringScreen() {
 						},
 						{
 							key: "threshold_value",
-							title: "Limit Â°C",
+							title: "Limit °C",
 							flex: 0.9,
 							numeric: true,
 							render: (value) =>

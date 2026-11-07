@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { AppState } from "react-native";
 import { describeBreach, shouldNotify } from "../lib/alarmTrigger.js";
 import { ensureNotificationsReady, notifyAlarm } from "../services/notifications.js";
 
@@ -16,7 +15,6 @@ export function useAlarmNotifications({ status, temperature, threshold }) {
 	const [permission, setPermission] = useState("unknown");
 	const [lastFiredAt, setLastFiredAt] = useState(null);
 	const previousRef = useRef(status?.key ?? "unknown");
-	const appStateRef = useRef(AppState.currentState);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -26,13 +24,6 @@ export function useAlarmNotifications({ status, temperature, threshold }) {
 		return () => {
 			cancelled = true;
 		};
-	}, []);
-
-	useEffect(() => {
-		const subscription = AppState.addEventListener("change", (next) => {
-			appStateRef.current = next;
-		});
-		return () => subscription.remove();
 	}, []);
 
 	useEffect(() => {

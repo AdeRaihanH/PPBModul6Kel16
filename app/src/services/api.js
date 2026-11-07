@@ -24,7 +24,16 @@ async function request(path, options = {}) {
     });
 
     if (!response.ok) {
-      const message = await response.text();
+      // The API answers errors as { error }. Showing the raw body would put
+      // `{"error":"value must be a number"}` in the banner, so unwrap it.
+      const raw = await response.text();
+      let message = raw;
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed.error === "string") message = parsed.error;
+      } catch {
+        // Not JSON (a proxy error page, say) — the raw text is the best we have.
+      }
       throw new Error(message || `Request failed with status ${response.status}`);
     }
 

@@ -1,6 +1,11 @@
 import { pool } from "../config/database.js";
 import { normalizeRange } from "./readingsModel.js";
 
+// Same bounds the app's input enforces (ControlScreen MIN/MAX_THRESHOLD). Kept in
+// sync deliberately: the UI limit is a courtesy, this one is the rule.
+export const MIN_VALUE = -50;
+export const MAX_VALUE = 100;
+
 function normalize(row) {
   if (!row) return row;
   return {
@@ -16,6 +21,12 @@ function assertValidValue(value) {
     !Number.isFinite(value)
   ) {
     throw new Error("value must be a number");
+  }
+  // The app already limits the input, but the API is the boundary that matters:
+  // a threshold of 9999 would make every reading look safe forever, silently
+  // disabling the alarm. Bounds are enforced here as well.
+  if (value < MIN_VALUE || value > MAX_VALUE) {
+    throw new Error(`value must be between ${MIN_VALUE} and ${MAX_VALUE}`);
   }
 }
 

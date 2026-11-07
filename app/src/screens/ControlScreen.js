@@ -127,7 +127,7 @@ export function ControlScreen() {
                 <View style={styles.currentPill} accessible accessibilityLabel={`Current threshold ${Number(latestThreshold).toFixed(2)} degrees`}>
                   <Ionicons name="speedometer-outline" size={16} color={theme.color.text2} />
                   <Text style={styles.currentText}>
-                    Current: {Number(latestThreshold).toFixed(2)}Â°C
+                    Current: {Number(latestThreshold).toFixed(2)}°C
                   </Text>
                 </View>
               ) : null}
@@ -150,7 +150,7 @@ export function ControlScreen() {
                 style={styles.label}
                 accessibilityLabel="Threshold in degrees Celsius, required"
               >
-                Threshold (Â°C) <Text style={styles.required}>*</Text>
+                Threshold (°C) <Text style={styles.required}>*</Text>
               </Text>
               <Text style={styles.helper}>Alert when temperature exceeds this value.</Text>
               <TextInput
@@ -246,7 +246,7 @@ export function ControlScreen() {
               },
               {
                 key: "value",
-                title: "Threshold Â°C",
+                title: "Threshold °C",
                 flex: 0.9,
                 numeric: true,
                 render: (value) =>
@@ -256,7 +256,7 @@ export function ControlScreen() {
                 key: "note",
                 title: "Note",
                 flex: 1.1,
-                render: (value) => value || "â€”",
+                render: (value) => value || "—",
               },
             ]}
             data={history}
@@ -388,7 +388,7 @@ const makeStyles = ({ color, space, radius, shadow, type, hit }) =>
   noteInput: {
     minHeight: 64,
     textAlignVertical: "top",
-    // ponytail: gap between wrapped lines only â€” py trimmed via minHeight/padding
+    // ponytail: gap between wrapped lines only — py trimmed via minHeight/padding
     lineHeight: 22,
     paddingVertical: 8,
   },

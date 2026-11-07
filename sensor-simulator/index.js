@@ -66,8 +66,8 @@ client.on("connect", () => {
 	console.log(`MQTT connected as ${clientId}`);
 	console.log(
 		useRandom
-			? "Mode: random (20 → 35 °C) — no trend, so ETA stays hidden"
-			: "Mode: trend (24 → 32 °C, heats then cools) — ETA should appear",
+			? "Mode: random (20 → 35 °C) — no trend, so the panel reports Safe/Over only"
+			: "Mode: trend (24 → 32 °C, heats then cools) — the rate should swing between rising and falling",
 	);
 });
 
